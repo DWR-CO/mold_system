@@ -4,12 +4,11 @@
   "images": [],
   "config": {
     "classifications": [
-      "部件大类",
-      "结构部件"
+      "部件大类"
     ],
     "pdfPath": "",
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-10-22T10:23:14.756Z"
+  "lastUpdated": "2026-10-22T10:24:42.981Z"
 }
