@@ -1,0 +1,15 @@
+{
+  "records": [],
+  "pdfs": [],
+  "images": [],
+  "config": {
+    "classifications": [
+      "部件大类",
+      "结构部件"
+    ],
+    "pdfPath": "",
+    "displayColumn": "模具状态"
+  },
+  "editPassword": "PECHOIN1931",
+  "lastUpdated": "2026-10-23T06:16:24.863Z"
+}
