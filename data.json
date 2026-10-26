@@ -1,0 +1,14 @@
+{
+  "records": [],
+  "config": {
+    "classifications": [
+      "部件大类",
+      "结构部件"
+    ],
+    "pdfPath": "",
+    "displayColumn": "模具状态"
+  },
+  "editPassword": "PECHOIN1931",
+  "lastUpdated": "2026-10-26T05:28:56.868Z",
+  "_note": "PDFs and images are stored locally and not synced to GitHub due to file size limits"
+}
