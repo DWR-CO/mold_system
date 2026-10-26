@@ -1650,6 +1650,7 @@ function loadGitHubConfig() {
       _githubConfig.token = config.token || '';
       _githubConfig.branch = config.branch || 'main';
       _githubConfig.lastSha = config.lastSha || null;
+      _githubConfig._lastPushTime = config.lastPushTime || 0;
       updateSyncStatus();
       if (_githubConfig.repo && _githubConfig.token) {
         startAutoSync();
@@ -1673,7 +1674,8 @@ function saveGitHubConfigToStorage() {
       repo: _githubConfig.repo,
       token: _githubConfig.token,
       branch: _githubConfig.branch,
-      lastSha: _githubConfig.lastSha
+      lastSha: _githubConfig.lastSha,
+      lastPushTime: _githubConfig._lastPushTime || 0
     }));
   } catch(e) {
     console.error('Failed to save GitHub config:', e);
@@ -1789,14 +1791,18 @@ function updateSyncStatus() {
 async function githubGetFile() {
   if (!_githubConfig.repo || !_githubConfig.token) return null;
   
-  var url = 'https://api.github.com/repos/' + _githubConfig.repo + '/contents/' + _githubConfig.filePath + '?ref=' + _githubConfig.branch;
+  // Add cache-busting timestamp to prevent stale cached responses
+  var url = 'https://api.github.com/repos/' + _githubConfig.repo + '/contents/' + _githubConfig.filePath + '?ref=' + _githubConfig.branch + '&_=' + Date.now();
   
   try {
     var response = await fetch(url, {
       headers: {
         'Authorization': 'token ' + _githubConfig.token,
-        'Accept': 'application/vnd.github.v3+json'
-      }
+        'Accept': 'application/vnd.github.v3+json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
     });
     
     if (response.status === 404 || response.status === 409) {
@@ -1904,6 +1910,15 @@ async function syncFromGitHub() {
   if (_githubConfig.isSyncing) return;
   if (_pushLock) {
     console.log('GitHub: Push in progress, skipping pull');
+    return;
+  }
+  
+  // CRITICAL: Don't pull within 10 seconds of a push.
+  // GitHub API may return stale/cached data immediately after a write.
+  var now = Date.now();
+  if (_githubConfig._lastPushTime && (now - _githubConfig._lastPushTime < 10000)) {
+    var waitSec = ((10000 - (now - _githubConfig._lastPushTime)) / 1000).toFixed(1);
+    console.log('[GitHub Pull] Skipped (push was ' + ((now - _githubConfig._lastPushTime) / 1000).toFixed(1) + 's ago, wait ' + waitSec + 's more)');
     return;
   }
   
