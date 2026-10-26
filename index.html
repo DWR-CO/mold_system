@@ -2165,16 +2165,20 @@ function updateLocalFromRemote(remoteData) {
     }
   }
   
-  // Update records from remote
-  if (remoteData.records) _localRecords = remoteData.records;
+  // CRITICAL: Never overwrite local data with empty remote data.
+  // Empty remote data is almost always an API delay or sync error.
+  // Only update local records when remote has actual data.
+  if (remoteData.records && remoteData.records.length > 0) {
+    _localRecords = remoteData.records;
+    console.log('[updateLocalFromRemote] Updated records from remote: ' + remoteData.records.length);
+  } else {
+    console.log('[updateLocalFromRemote] Remote data is empty, keeping local data (' + _localRecords.length + ' records)');
+  }
   
-  // Handle empty remote data (user cleared data on another client)
+  // CRITICAL: Never clear local PDFs/images when remote is empty.
+  // This was the #1 cause of data loss - remote API returning empty due to delay.
   if (!remoteData.records || remoteData.records.length === 0) {
-    // Clear everything including local PDFs/images to stay in sync
-    _localPdfs = [];
-    _localImages = [];
-    clearLocalPdfData();
-    console.log('GitHub: Remote data is empty, cleared local PDFs/images too');
+    console.log('[updateLocalFromRemote] Remote data is empty, keeping local PDFs/images (' + _localPdfs.length + ' PDFs, ' + _localImages.length + ' images)');
   }
   // Note: When pdfMeta exists, PDFs will be downloaded separately by syncFromGitHub()
   // Local PDFs are temporarily preserved until download completes
