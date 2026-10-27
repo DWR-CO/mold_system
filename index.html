@@ -2118,6 +2118,15 @@ async function pushToGitHub() {
       
       for (var i = 0; i < _localPdfs.length; i++) {
         var pdf = _localPdfs[i];
+        
+        // Skip PDFs without base64 content (metadata-only from localStorage)
+        if (!pdf.base64) {
+          console.log('[PDF Upload] Skipped (no base64): ' + pdf.file_name);
+          failCount++;
+          _pdfSyncProgress.current++;
+          continue;
+        }
+        
         var filePath = getPdfFilePath(pdf.record_id, pdf.file_name);
         
         // Extract base64 content (remove data:application/pdf;base64, prefix if present)
