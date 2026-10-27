@@ -1603,11 +1603,53 @@ async function githubPutPdfFile(base64Data, filePath, message) {
     body: JSON.stringify(body)
   });
   
-  if (response.ok) {
-    var data = await response.json();
-    return { success: true, sha: data.content.sha };
-  } else {
+  // Retry on 409 conflict (up to 3 times)
+  for (var attempt = 0; attempt < 3; attempt++) {
+    if (response.ok) {
+      var data = await response.json();
+      return { success: true, sha: data.content.sha };
+    }
+    
     var errorText = await response.text();
+    
+    // On 409 conflict, fetch fresh SHA and retry
+    if (response.status === 409 && attempt < 2) {
+      console.log('[PDF Upload] 409 conflict on ' + filePath + ', retrying (attempt ' + (attempt + 1) + ')...');
+      
+      // Fetch fresh SHA
+      try {
+        var getResponse = await fetch(url + '?ref=' + _githubConfig.branch + '&_=' + Date.now(), {
+          headers: { 'Authorization': 'token ' + _githubConfig.token, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (getResponse.ok) {
+          var getFileData = await getResponse.json();
+          body.sha = getFileData.sha;
+        } else {
+          // File doesn't exist, remove SHA to create new
+          delete body.sha;
+        }
+      } catch(e) {
+        console.warn('[PDF Upload] Could not fetch SHA, trying without:', e.message);
+        delete body.sha;
+      }
+      
+      // Wait a bit before retry
+      await delay(500);
+      
+      // Retry the PUT
+      response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'token ' + _githubConfig.token,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      continue;
+    }
+    
+    // Non-409 error or final attempt failed
     throw new Error('Upload PDF failed: ' + response.status + ' - ' + errorText);
   }
 }
