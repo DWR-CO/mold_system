@@ -1268,21 +1268,35 @@ var _nextImgId = _localImages.length > 0 ? Math.max.apply(null, _localImages.map
 var _serverAvailable = true; // Local mode always "available"
 
 // localStorage persistence for PDFs and images (survives page refresh)
+// CRITICAL: Do NOT save full base64 PDF data to localStorage (quota exceeded with many PDFs)
+// Only save metadata. Base64 data stays in memory until pushed to GitHub.
 function saveLocalPdfData() {
   try {
+    // Save only metadata without base64 content to avoid quota exceeded
+    var pdfMetadata = _localPdfs.map(function(p) {
+      return {
+        id: p.id,
+        record_id: p.record_id,
+        file_name: p.file_name,
+        file_path: p.file_path,
+        sort_order: p.sort_order
+        // Note: base64 is intentionally excluded to save space
+      };
+    });
+    
     var data = {
-      pdfs: _localPdfs,
+      pdfs: pdfMetadata,
       images: _localImages,
       nextPdfId: _nextPdfId,
       nextImgId: _nextImgId
     };
     var json = JSON.stringify(data);
     localStorage.setItem('mold_local_media', json);
-    console.log('[LocalStorage] Saved ' + _localPdfs.length + ' PDFs, ' + _localImages.length + ' images (' + (json.length / 1024).toFixed(1) + ' KB)');
+    console.log('[LocalStorage] Saved ' + _localPdfs.length + ' PDF metadata (' + (json.length / 1024).toFixed(1) + ' KB)');
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
-      console.warn('[LocalStorage] Storage quota exceeded, PDFs/images not saved. Size: ' + (_localPdfs.length + ' PDFs, ' + _localImages.length + ' images'));
-      showToast('PDF/图片数据过大，无法保存到本地存储。刷新页面后需重新导入PDF。', 'warning');
+      console.warn('[LocalStorage] Storage quota exceeded even with metadata-only. Size: ' + (_localPdfs.length + ' PDFs'));
+      showToast('PDF数量过多，localStorage已满。请刷新页面后立即推送到GitHub。', 'warning');
     } else {
       console.error('[LocalStorage] Failed to save PDF/image data:', e);
     }
@@ -1295,8 +1309,22 @@ function loadLocalPdfData() {
     if (saved) {
       var data = JSON.parse(saved);
       if (data.pdfs && data.pdfs.length > 0) {
-        _localPdfs = data.pdfs;
-        console.log('[LocalStorage] Loaded ' + _localPdfs.length + ' PDFs from local storage');
+        // Handle both old format (with base64) and new format (metadata only)
+        _localPdfs = data.pdfs.map(function(p) {
+          // If PDF has base64, use it; otherwise add placeholder
+          if (p.base64) {
+            return p;
+          } else {
+            // Metadata-only PDF - will be restored from GitHub or user needs to re-import
+            console.log('[LocalStorage] PDF without base64:', p.file_name, '(will restore from GitHub on sync)');
+            return p;
+          }
+        });
+        console.log('[LocalStorage] Loaded ' + _localPdfs.length + ' PDF metadata from local storage');
+        
+        // Check how many have base64
+        var withBase64 = _localPdfs.filter(function(p) { return p.base64; }).length;
+        console.log('[LocalStorage] PDFs with base64: ' + withBase64 + ', without: ' + (_localPdfs.length - withBase64));
       }
       if (data.images && data.images.length > 0) {
         _localImages = data.images;
@@ -1491,9 +1519,15 @@ async function loadFromServer() {
     }
     var recPdfs = _localPdfs.filter(function(p) { return p.record_id === rec.id; });
     if (recPdfs.length > 0) {
-      allPdfs[rec.id] = recPdfs.map(function(p) {
-        return { name: p.file_name || 'document.pdf', url: p.base64 || p.file_path };
-      });
+      // Only include PDFs that have base64 content (skip metadata-only PDFs pending GitHub sync)
+      var pdfsWithBase64 = recPdfs.filter(function(p) { return p.base64; });
+      if (pdfsWithBase64.length > 0) {
+        allPdfs[rec.id] = pdfsWithBase64.map(function(p) {
+          return { name: p.file_name || 'document.pdf', url: p.base64 };
+        });
+      } else if (recPdfs.length > 0) {
+        console.log('[loadFromServer] Record ' + rec.id + ' has ' + recPdfs.length + ' PDF(s) without base64 (pending GitHub sync)');
+      }
     }
   }
 
