@@ -1,6 +1,97 @@
 {
   "records": [],
-  "pdfMeta": [],
+  "pdfMeta": [
+    {
+      "id": 1,
+      "record_id": 100,
+      "file_name": "水嫩精纯眼部精华液15ml滴肩套.pdf",
+      "filePath": "pdfs/100_水嫩精纯眼部精华液15ml滴肩套.pdf"
+    },
+    {
+      "id": 2,
+      "record_id": 99,
+      "file_name": "水嫩精纯眼部精华液15ml滴管盖.pdf",
+      "filePath": "pdfs/99_水嫩精纯眼部精华液15ml滴管盖.pdf"
+    },
+    {
+      "id": 3,
+      "record_id": 106,
+      "file_name": "施美洗护身体乳358ml瓶.pdf",
+      "filePath": "pdfs/106_施美洗护身体乳358ml瓶.pdf"
+    },
+    {
+      "id": 4,
+      "record_id": 105,
+      "file_name": "施美洗护身体乳188ml瓶.pdf",
+      "filePath": "pdfs/105_施美洗护身体乳188ml瓶.pdf"
+    },
+    {
+      "id": 5,
+      "record_id": 108,
+      "file_name": "施美洗护沐浴露750ml瓶.pdf",
+      "filePath": "pdfs/108_施美洗护沐浴露750ml瓶.pdf"
+    },
+    {
+      "id": 6,
+      "record_id": 107,
+      "file_name": "施美洗护沐浴露450ml瓶.pdf",
+      "filePath": "pdfs/107_施美洗护沐浴露450ml瓶.pdf"
+    },
+    {
+      "id": 7,
+      "record_id": 25,
+      "file_name": "三生花洗发水800mlPE瓶子.pdf",
+      "filePath": "pdfs/25_三生花洗发水800mlPE瓶子.pdf"
+    },
+    {
+      "id": 8,
+      "record_id": 22,
+      "file_name": "三生花洗发水500mlPE瓶子.pdf",
+      "filePath": "pdfs/22_三生花洗发水500mlPE瓶子.pdf"
+    },
+    {
+      "id": 9,
+      "record_id": 23,
+      "file_name": "三生花洗发水300mlPE瓶子.pdf",
+      "filePath": "pdfs/23_三生花洗发水300mlPE瓶子.pdf"
+    },
+    {
+      "id": 10,
+      "record_id": 103,
+      "file_name": "三生花玲珑玉润精粹水120ML&三生花控油清肌精华水120ML&三生花玲珑玉润精华乳100ML&三生花控油清肌精华乳100ML-外盖.pdf",
+      "filePath": "pdfs/103_三生花玲珑玉润精粹水120ML_三生花控油清肌精华水120ML_三生花玲珑玉润精华乳100ML_三生花控油清肌精华乳100ML-外盖.pdf"
+    },
+    {
+      "id": 11,
+      "record_id": 104,
+      "file_name": "三生花玲珑玉润精粹水120ML&三生花控油清肌精华水120ML&三生花玲珑玉润精华乳100ML&三生花控油清肌精华乳100ML-顶片.pdf",
+      "filePath": "pdfs/104_三生花玲珑玉润精粹水120ML_三生花控油清肌精华水120ML_三生花玲珑玉润精华乳100ML_三生花控油清肌精华乳100ML-顶片.pdf"
+    },
+    {
+      "id": 12,
+      "record_id": 102,
+      "file_name": "三生花花露卸妆洁面精华蜜&舒润卸妆洁面花凝露200g塑料瓶.pdf",
+      "filePath": "pdfs/102_三生花花露卸妆洁面精华蜜_舒润卸妆洁面花凝露200g塑料瓶.pdf"
+    },
+    {
+      "id": 13,
+      "record_id": 75,
+      "file_name": "三生花30ml粉底液-外盖.pdf",
+      "filePath": "pdfs/75_三生花30ml粉底液-外盖.pdf"
+    },
+    {
+      "id": 14,
+      "record_id": 76,
+      "file_name": "三生花30ml粉底液-内盖.pdf",
+      "filePath": "pdfs/76_三生花30ml粉底液-内盖.pdf"
+    },
+    {
+      "id": 15,
+      "record_id": 91,
+      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-前钮.pdf",
+      "filePath": "pdfs/91_三生花_沁水无瑕花酿粉底液_气垫型_-前钮.pdf"
+    }
+  ],
   "config": {
     "classifications": [
       "部件大类",
@@ -10,6 +101,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-10-27T08:14:26.200Z",
+  "lastUpdated": "2026-10-27T08:16:25.513Z",
   "version": 2
 }
