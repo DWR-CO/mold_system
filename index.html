@@ -1278,9 +1278,32 @@ function saveLocalPdfData() {
 }
 
 function loadLocalPdfData() {
-  // Intentionally empty - don't load PDFs from localStorage due to quota limits
-  // PDFs are restored from GitHub after successful sync
-  console.log('[LocalStorage] Skipping PDF load (quota limit). PDFs will be restored from GitHub.');
+  try {
+    var saved = localStorage.getItem('mold_local_media');
+    if (saved) {
+      var data = JSON.parse(saved);
+      if (data.pdfs && data.pdfs.length > 0) {
+        // Load PDF metadata from localStorage
+        _localPdfs = data.pdfs;
+        console.log('[LocalStorage] Loaded ' + _localPdfs.length + ' PDF metadata from local storage');
+        
+        // Note: These PDFs don't have base64 content yet.
+        // They will be restored when:
+        // 1. User re-imports the PDF files (base64 added to memory)
+        // 2. Or syncFromGitHub downloads them from GitHub
+        var withBase64 = _localPdfs.filter(function(p) { return p.base64; }).length;
+        console.log('[LocalStorage] PDFs with base64: ' + withBase64 + ', without: ' + (_localPdfs.length - withBase64));
+      }
+      if (data.images && data.images.length > 0) {
+        _localImages = data.images;
+        console.log('[LocalStorage] Loaded ' + _localImages.length + ' images from local storage');
+      }
+      if (data.nextPdfId) _nextPdfId = data.nextPdfId;
+      if (data.nextImgId) _nextImgId = data.nextImgId;
+    }
+  } catch(e) {
+    console.error('[LocalStorage] Failed to load PDF/image data:', e);
+  }
 }
 
 function clearLocalPdfData() {
