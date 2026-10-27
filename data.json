@@ -1,14 +1,14 @@
 {
   "records": [],
+  "pdfMeta": [],
   "config": {
     "classifications": [
       "部件大类",
       "结构部件"
     ],
-    "pdfPath": "",
-    "displayColumn": "模具状态"
+    "pdfPath": ""
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-10-27T07:33:33.255Z",
+  "lastUpdated": "2026-10-27T07:36:32.688Z",
   "version": 2
 }
