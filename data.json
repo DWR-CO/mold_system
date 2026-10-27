@@ -2508,7 +2508,14 @@
       "updated_at": "2026-10-27T08:34:00.185Z"
     }
   ],
-  "pdfMeta": [],
+  "pdfMeta": [
+    {
+      "id": 1,
+      "record_id": 44,
+      "file_name": "百雀羚20ml水光+肌初+至臻+水能量中层.pdf",
+      "filePath": "pdfs/44_百雀羚20ml水光_肌初_至臻_水能量中层.pdf"
+    }
+  ],
   "config": {
     "classifications": [
       "部件大类",
@@ -2518,6 +2525,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-10-27T08:34:00.690Z",
+  "lastUpdated": "2026-10-27T09:04:01.819Z",
   "version": 2
 }
