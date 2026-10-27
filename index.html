@@ -1798,9 +1798,7 @@ async function githubGetFile() {
     var response = await fetch(url, {
       headers: {
         'Authorization': 'token ' + _githubConfig.token,
-        'Accept': 'application/vnd.github.v3+json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+        'Accept': 'application/vnd.github.v3+json'
       },
       cache: 'no-store'
     });
@@ -1856,8 +1854,8 @@ async function githubPutFile(content, message, sha) {
     };
     if (currentSha) body.sha = currentSha;
     
-    // Try push, retry once on 409
-    for (var attempt = 0; attempt < 2; attempt++) {
+    // Try push, retry on 409 (conflict) or 422 (missing SHA)
+    for (var attempt = 0; attempt < 3; attempt++) {
       var response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -1878,17 +1876,25 @@ async function githubPutFile(content, message, sha) {
       
       var errorText = await response.text();
       
-      // On 409 SHA conflict, fetch fresh SHA and retry
-      if (response.status === 409 && attempt === 0) {
-        console.log('[GitHub Push] 409 conflict, fetching fresh SHA and retrying...');
+      // On 409 SHA conflict or 422 missing SHA, fetch fresh SHA and retry
+      if ((response.status === 409 || response.status === 422) && attempt < 2) {
+        console.log('[GitHub Push] ' + response.status + ' error, fetching fresh SHA and retrying (attempt ' + (attempt + 1) + ')...');
         try {
           var freshFile = await githubGetFile();
           if (freshFile && freshFile.sha) {
             body.sha = freshFile.sha;
+            console.log('[GitHub Push] Got fresh SHA: ' + freshFile.sha.substring(0, 8) + '...');
             continue; // retry with fresh SHA
+          } else {
+            // File doesn't exist on GitHub - remove SHA to create new file
+            console.log('[GitHub Push] File not found on GitHub, will create new');
+            delete body.sha;
+            continue;
           }
         } catch(retryErr) {
-          console.error('[GitHub Push] Failed to fetch fresh SHA:', retryErr);
+          console.error('[GitHub Push] Failed to fetch fresh SHA:', retryErr.message);
+          // Can't get SHA - don't retry, throw the original error
+          throw new Error('GitHub API error: ' + response.status + ' - ' + errorText + ' (also failed to fetch SHA: ' + retryErr.message + ')');
         }
       }
       
