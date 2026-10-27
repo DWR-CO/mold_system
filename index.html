@@ -3165,14 +3165,14 @@ async function saveAddRecord() {
 // ==================== PDF Upload & Auto-Match ====================
 function handleFileSelect(e) { if(e.target.files[0]) processFile(e.target.files[0]); }
 
-function handlePdfUpload(e) {
+async function handlePdfUpload(e) {
   var files = Array.from(e.target.files).filter(function(f) {
     return f.name.toLowerCase().endsWith('.pdf');
   });
   if (!files.length) { showToast('请选择PDF文件', 'error'); return; }
 
   if (appState.rawData && appState.rawData.length > 0) {
-    var result = autoMatchPdfs(files);
+    var result = await autoMatchPdfs(files);
     showToast('PDF匹配完成：' + result.matched + ' 个成功 / ' + files.length + ' 个总计' +
       (result.unmatched > 0 ? '，' + result.unmatched + ' 个未匹配' : ''),
       result.matched > 0 ? 'success' : 'error');
@@ -3192,7 +3192,7 @@ async function handleDataPdfUpload(e) {
   });
   if (!files.length) { showToast('请选择PDF文件', 'error'); return; }
 
-  var result = autoMatchPdfs(files);
+  var result = await autoMatchPdfs(files);
 
   if (result.matched > 0 && _serverAvailable) {
     showToast('正在上传 ' + result.matched + ' 个PDF到服务器...', 'info');
@@ -3239,7 +3239,7 @@ function setupDragDrop(id) {
   el.addEventListener('drop', function(e) { e.preventDefault(); el.classList.remove('dragover'); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
 }
 
-function autoMatchPdfs(files) {
+async function autoMatchPdfs(files) {
   if (!appState.rawData || !appState.rawData.length) return { matched: 0, unmatched: 0 };
 
   console.log('[PDF匹配] 开始匹配', files.length, '个PDF文件');
@@ -3300,6 +3300,9 @@ function autoMatchPdfs(files) {
   console.log('[PDF匹配] 名称映射条目数:', Object.keys(nameMap).length, '合同编号映射条目数:', Object.keys(contractMap).length);
 
   var matched = 0, unmatched = 0;
+  // Track which files were matched and their dbIds for _localPdfs storage
+  var matchedFileInfos = [];
+  
   for (var f = 0; f < files.length; f++) {
     var fileName = files[f].name;
     var nameWithoutExt = fileName.replace(/\.pdf$/i, '');
@@ -3341,6 +3344,8 @@ function autoMatchPdfs(files) {
           }
           appState.pdfFiles[dbId].push(files[f]);
         }
+        // Track for _localPdfs storage
+        matchedFileInfos.push({ dbId: dbId, file: files[f] });
       }
       matched++;
     } else {
@@ -3349,8 +3354,42 @@ function autoMatchPdfs(files) {
     }
   }
 
+  // CRITICAL: Also store matched PDFs in _localPdfs for persistence and GitHub sync
+  if (matchedFileInfos.length > 0) {
+    console.log('[PDF匹配] 存储', matchedFileInfos.length, '个PDF到_localPdfs...');
+    for (var i = 0; i < matchedFileInfos.length; i++) {
+      var info = matchedFileInfos[i];
+      try {
+        var base64 = await readFileAsBase64(info.file);
+        var pdf = {
+          id: _nextPdfId++,
+          record_id: info.dbId,
+          file_name: info.file.name,
+          file_path: 'local://' + info.file.name,
+          sort_order: 0,
+          base64: base64
+        };
+        _localPdfs.push(pdf);
+      } catch(e) {
+        console.error('[PDF匹配] 读取PDF失败:', info.file.name, e);
+      }
+    }
+    saveLocalPdfData();
+    console.log('[PDF匹配] _localPdfs count:', _localPdfs.length);
+  }
+
   console.log('[PDF匹配] 完成: 匹配', matched, '个, 未匹配', unmatched, '个');
   return { matched: matched, unmatched: unmatched };
+}
+
+// Helper: Read file as base64 data URL
+function readFileAsBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(reader.result); };
+    reader.onerror = function() { reject(reader.error); };
+    reader.readAsDataURL(file);
+  });
 }
 
 function processFile(file) {
@@ -3511,7 +3550,7 @@ async function importAppend() {
 
   // Auto-match pending PDFs BEFORE preparing import records
   if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
-    var matchResult = autoMatchPdfs(window._pendingPdfFiles);
+    var matchResult = await autoMatchPdfs(window._pendingPdfFiles);
     window._pendingPdfFiles = [];
     if (matchResult.matched > 0) {
       showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
@@ -3599,7 +3638,7 @@ async function importReplaceReuse(fileName) {
 
   // Auto-match pending PDFs BEFORE preparing import records
   if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
-    var matchResult = autoMatchPdfs(window._pendingPdfFiles);
+    var matchResult = await autoMatchPdfs(window._pendingPdfFiles);
     window._pendingPdfFiles = [];
     if (matchResult.matched > 0) {
       showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
@@ -3664,7 +3703,7 @@ async function importReplaceReuse(fileName) {
   showToast('已替换数据，复用 ' + savedConfig.classifications.length + ' 级分类配置，导入 ' + result.imported + ' 条记录' + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : ''), 'success');
 }
 
-function importReplaceNew(fileName) {
+async function importReplaceNew(fileName) {
   closeModal('importModal');
 
   // Revoke any open PDF URL
@@ -4515,7 +4554,7 @@ async function confirmMapping() {
   // Auto-match pending PDFs BEFORE preparing import records
   // This ensures matched PDFs are included in the server import
   if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
-    var matchResult = autoMatchPdfs(window._pendingPdfFiles);
+    var matchResult = await autoMatchPdfs(window._pendingPdfFiles);
     window._pendingPdfFiles = [];
     if (matchResult.matched > 0) {
       showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
