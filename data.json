@@ -2514,6 +2514,12 @@
       "record_id": 44,
       "file_name": "百雀羚20ml水光+肌初+至臻+水能量中层.pdf",
       "filePath": "pdfs/44_百雀羚20ml水光_肌初_至臻_水能量中层.pdf"
+    },
+    {
+      "id": 2,
+      "record_id": 50,
+      "file_name": "百雀羚30ml水光+肌初+至臻+水能量中层.pdf",
+      "filePath": "pdfs/50_百雀羚30ml水光_肌初_至臻_水能量中层.pdf"
     }
   ],
   "config": {
@@ -2525,6 +2531,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-10-27T09:04:01.819Z",
+  "lastUpdated": "2026-10-27T09:16:05.150Z",
   "version": 2
 }
