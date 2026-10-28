@@ -925,7 +925,7 @@
       "data": {
         "模具状态": "呆滞",
         "开模时间": "2019年",
-        "模具合同编号": "BQL19010",
+        "模具合同编号": "BQL19010、B1029",
         "模具名称": "百雀羚20ml、30ml水光+肌初+至臻+水能量盖子-B1029",
         "部件大类": "盖",
         "结构部件": "盖",
@@ -941,7 +941,7 @@
         "__EMPTY": ""
       },
       "created_at": "2026-10-27T09:39:15.831Z",
-      "updated_at": "2026-10-27T09:39:15.831Z"
+      "updated_at": "2026-10-28T07:46:10.471Z"
     },
     {
       "id": 42,
@@ -3002,36 +3002,6 @@
       "filePath": "pdfs/71_百雀羚草本肌初_水光5ml小样-外罩.pdf"
     },
     {
-      "id": 83,
-      "record_id": 81,
-      "file_name": "百雀羚帧颜系列高能面霜50G肩套.pdf",
-      "filePath": "pdfs/81_百雀羚帧颜系列高能面霜50G肩套.pdf"
-    },
-    {
-      "id": 84,
-      "record_id": 82,
-      "file_name": "百雀羚帧颜系列高能面霜50G螺牙大盖.pdf",
-      "filePath": "pdfs/82_百雀羚帧颜系列高能面霜50G螺牙大盖.pdf"
-    },
-    {
-      "id": 85,
-      "record_id": 79,
-      "file_name": "百雀羚帧颜系列高能面霜50G上盖.pdf",
-      "filePath": "pdfs/79_百雀羚帧颜系列高能面霜50G上盖.pdf"
-    },
-    {
-      "id": 86,
-      "record_id": 83,
-      "file_name": "百雀羚帧颜系列高能面霜50G外瓶.pdf",
-      "filePath": "pdfs/83_百雀羚帧颜系列高能面霜50G外瓶.pdf"
-    },
-    {
-      "id": 87,
-      "record_id": 80,
-      "file_name": "百雀羚帧颜系列高能面霜50G压盖.pdf",
-      "filePath": "pdfs/80_百雀羚帧颜系列高能面霜50G压盖.pdf"
-    },
-    {
       "id": 88,
       "record_id": 109,
       "file_name": "施美洗护沐浴露750ml瓶.pdf",
@@ -3054,30 +3024,6 @@
       "record_id": 106,
       "file_name": "施美洗护身体乳188ml瓶.pdf",
       "filePath": "pdfs/106_施美洗护身体乳188ml瓶.pdf"
-    },
-    {
-      "id": 92,
-      "record_id": 90,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-底.pdf",
-      "filePath": "pdfs/90_三生花_沁水无瑕花酿粉底液_气垫型_-底.pdf"
-    },
-    {
-      "id": 93,
-      "record_id": 89,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-盖.pdf",
-      "filePath": "pdfs/89_三生花_沁水无瑕花酿粉底液_气垫型_-盖.pdf"
-    },
-    {
-      "id": 94,
-      "record_id": 91,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-内底.pdf",
-      "filePath": "pdfs/91_三生花_沁水无瑕花酿粉底液_气垫型_-内底.pdf"
-    },
-    {
-      "id": 95,
-      "record_id": 92,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-前钮.pdf",
-      "filePath": "pdfs/92_三生花_沁水无瑕花酿粉底液_气垫型_-前钮.pdf"
     },
     {
       "id": 96,
@@ -3143,6 +3089,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-10-27T09:41:09.249Z",
+  "lastUpdated": "2026-10-28T07:46:10.977Z",
   "version": 2
 }
