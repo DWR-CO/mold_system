@@ -2100,6 +2100,7 @@ async function syncFromGitHub() {
         var downloadedPdfs = [];
         var successCount = 0;
         var failCount = 0;
+        var failedPdfMetaIds = []; // Track IDs of PDFs that failed (404/not found)
         
         for (var i = 0; i < pdfsToDownload.length; i++) {
           var pdfMeta = pdfsToDownload[i];
@@ -2121,12 +2122,16 @@ async function syncFromGitHub() {
               successCount++;
               console.log('[PDF Download] ' + (i + 1) + '/' + pdfsToDownload.length + ' - ' + pdfMeta.file_name);
             } else {
+              // 404 / Not found - mark for cleanup
               failCount++;
-              console.log('[PDF Download] Not found: ' + pdfMeta.file_name);
+              failedPdfMetaIds.push(pdfMeta.id);
+              console.log('[PDF Download] Not found (will cleanup): ' + pdfMeta.file_name);
             }
           } catch(e) {
+            // Network error or other failure - also mark for cleanup
             failCount++;
-            console.error('[PDF Download] Failed: ' + pdfMeta.file_name + ' - ' + e.message);
+            failedPdfMetaIds.push(pdfMeta.id);
+            console.error('[PDF Download] Failed (will cleanup): ' + pdfMeta.file_name + ' - ' + e.message);
           }
           
           _pdfSyncProgress.current = i + 1;
@@ -2135,6 +2140,34 @@ async function syncFromGitHub() {
           // Throttle: wait 300ms between downloads
           if (i < pdfsToDownload.length - 1) {
             await delay(300);
+          }
+        }
+        
+        // CRITICAL: Auto-cleanup - remove failed PDF entries from local and remote data
+        // This prevents repeated download attempts for PDFs that don't exist on GitHub
+        if (failedPdfMetaIds.length > 0) {
+          console.log('[GitHub Pull] Cleaning up ' + failedPdfMetaIds.length + ' failed PDF entries...');
+          var failedIdSet = {};
+          failedPdfMetaIds.forEach(function(id) { failedIdSet[id] = true; });
+          
+          // Remove from _localPdfs
+          var beforeLocalCount = _localPdfs.length;
+          _localPdfs = _localPdfs.filter(function(p) { return !failedIdSet[p.id]; });
+          if (_localPdfs.length < beforeLocalCount) {
+            saveLocalPdfData();
+            console.log('[GitHub Pull] Removed ' + (beforeLocalCount - _localPdfs.length) + ' failed PDFs from local storage');
+          }
+          
+          // Remove from remoteData.pdfMeta so cleaned data gets pushed back
+          if (remoteData.pdfMeta) {
+            var beforeRemoteCount = remoteData.pdfMeta.length;
+            remoteData.pdfMeta = remoteData.pdfMeta.filter(function(p) { return !failedIdSet[p.id]; });
+            if (remoteData.pdfMeta.length < beforeRemoteCount) {
+              console.log('[GitHub Pull] Removed ' + (beforeRemoteCount - remoteData.pdfMeta.length) + ' failed PDFs from remote pdfMeta');
+              // Push cleaned data back to GitHub
+              console.log('[GitHub Pull] Pushing cleaned pdfMeta to GitHub...');
+              await pushToGitHub();
+            }
           }
         }
         
@@ -2191,7 +2224,8 @@ async function syncFromGitHub() {
         renderApp();
         
         if (failCount > 0) {
-          showToast('PDF同步完成：' + successCount + ' 成功，' + failCount + ' 失败', 'warning');
+          var cleanupMsg = failedPdfMetaIds.length > 0 ? '（已清理' + failedPdfMetaIds.length + '条无效记录）' : '';
+          showToast('PDF同步完成：' + successCount + ' 成功，' + failCount + ' 失败' + cleanupMsg, 'warning');
         }
       } else if (remoteData.pdfs && remoteData.pdfs.length > 0) {
         // Fallback: use old format pdfs directly (with base64 content)
