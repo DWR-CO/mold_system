@@ -3635,34 +3635,29 @@ async function autoMatchPdfs(files) {
 
   if (!moldCol && !contractCol) return { matched: 0, unmatched: 0 };
 
-  // Build mold name → origIdx lookup (one-to-one, first match wins)
+  // Build mold name → mappedDataIdx lookup (one-to-one, first match wins)
+  // CRITICAL: Use mappedData (filtered view) instead of rawData (full array)
+  // because dataOrigIdx only contains indices for the filtered/mapped records.
+  // Using rawData indices would cause index mismatch and wrong record matching.
+  var sourceData = appState.mappedData || appState.rawData;
   var nameMap = {};
   if (moldCol) {
-    for (var i = 0; i < appState.rawData.length; i++) {
-      var moldName = appState.rawData[i][moldCol];
+    for (var i = 0; i < sourceData.length; i++) {
+      var moldName = sourceData[i][moldCol];
       if (moldName != null && String(moldName).trim()) {
         var key = normalizeMoldName(String(moldName));
         if (!nameMap.hasOwnProperty(key)) {
           nameMap[key] = i;
-          // DEBUG: Log when adding "中层" or "外瓶" to nameMap
-          if (key.indexOf('中层') !== -1 || key.indexOf('外瓶') !== -1) {
-            console.log('[PDF匹配] nameMap添加:', key, '→ 索引', i, '完整名称:', moldName);
-          }
-        } else {
-          // DEBUG: Log duplicate mold names
-          if (key.indexOf('中层') !== -1 || key.indexOf('外瓶') !== -1) {
-            console.log('[PDF匹配] nameMap跳过重复:', key, '(已存在索引', nameMap[key], '), 当前索引', i, '完整名称:', moldName);
-          }
         }
       }
     }
   }
 
-  // Build contract number → [origIdx] lookup (one-to-many)
+  // Build contract number → [mappedDataIdx] lookup (one-to-many)
   var contractMap = {};
   if (contractCol) {
-    for (var i = 0; i < appState.rawData.length; i++) {
-      var contractNum = appState.rawData[i][contractCol];
+    for (var i = 0; i < sourceData.length; i++) {
+      var contractNum = sourceData[i][contractCol];
       if (contractNum != null && String(contractNum).trim()) {
         var cKey = normalizeMoldName(String(contractNum));
         if (!contractMap.hasOwnProperty(cKey)) {
@@ -3681,7 +3676,7 @@ async function autoMatchPdfs(files) {
   for (var mk = 0; mk < mapKeys.length; mk++) {
     var key = mapKeys[mk];
     var idx = nameMap[key];
-    var record = appState.rawData[idx];
+    var record = sourceData[idx];
     console.log('  ', key, '→ 索引', idx, '模具名称:', record[moldCol]);
   }
 
@@ -3703,7 +3698,7 @@ async function autoMatchPdfs(files) {
       console.log('[PDF匹配] ✓ 模具名称匹配成功（优先）, 索引:', nameMap[lookupKey]);
       matchedIndices.push(nameMap[lookupKey]);
       // Log the matched record details for debugging
-      var matchedRecord = appState.rawData[nameMap[lookupKey]];
+      var matchedRecord = sourceData[nameMap[lookupKey]];
       console.log('[PDF匹配]   匹配记录详情 - 模具名称:', matchedRecord[moldCol], '合同编号:', matchedRecord[contractCol]);
     }
 
@@ -3714,7 +3709,7 @@ async function autoMatchPdfs(files) {
       for (var c = 0; c < contractMatches.length; c++) {
         matchedIndices.push(contractMatches[c]);
         // Log each matched record
-        var matchedRecord = appState.rawData[contractMatches[c]];
+        var matchedRecord = sourceData[contractMatches[c]];
         console.log('[PDF匹配]   匹配记录', (c+1), '- 模具名称:', matchedRecord[moldCol], '合同编号:', matchedRecord[contractCol]);
       }
     }
@@ -3729,9 +3724,9 @@ async function autoMatchPdfs(files) {
     if (matchedIndices.length > 0) {
       // Add PDF to all matched records in appState.pdfFiles (for display)
       for (var m = 0; m < matchedIndices.length; m++) {
-        var rawDataIdx = matchedIndices[m];
-        // Convert rawData index to database ID
-        var dbId = appState.dataOrigIdx[rawDataIdx] || rawDataIdx;
+        var mappedIdx = matchedIndices[m];
+        // Convert mappedData index to database record ID
+        var dbId = appState.dataOrigIdx[mappedIdx] !== undefined ? appState.dataOrigIdx[mappedIdx] : mappedIdx;
         if (!appState.pdfFiles[dbId]) {
           appState.pdfFiles[dbId] = files[f];
         } else {
@@ -3746,8 +3741,9 @@ async function autoMatchPdfs(files) {
       // Use file name as unique key to avoid duplicates
       var fileKey = fileName.toLowerCase();
       if (!_addedPdfFiles[fileKey]) {
-        // Convert rawData index to database ID (same as used for appState.pdfFiles)
-        var dbIdForLocalPdfs = appState.dataOrigIdx[matchedIndices[0]] || matchedIndices[0];
+        // Convert mappedData index to database record ID
+        var firstMappedIdx = matchedIndices[0];
+        var dbIdForLocalPdfs = appState.dataOrigIdx[firstMappedIdx] !== undefined ? appState.dataOrigIdx[firstMappedIdx] : firstMappedIdx;
         matchedFileInfos.push({ dbId: dbIdForLocalPdfs, file: files[f], fileKey: fileKey });
         _addedPdfFiles[fileKey] = true;
       }
