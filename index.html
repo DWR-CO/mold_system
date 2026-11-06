@@ -2246,6 +2246,37 @@ async function pushToGitHub() {
   
   _githubConfig._lastPushTime = now;
   
+  // DEDUPLICATE: Before pushing, ensure no duplicate records or PDFs
+  var seenRecordIds = {};
+  var uniqueRecords = [];
+  for (var di = 0; di < _localRecords.length; di++) {
+    var drec = _localRecords[di];
+    if (!seenRecordIds[drec.id]) {
+      seenRecordIds[drec.id] = true;
+      uniqueRecords.push(drec);
+    }
+  }
+  if (uniqueRecords.length < _localRecords.length) {
+    console.warn('[GitHub Push] DEDUP: Removed ' + (_localRecords.length - uniqueRecords.length) + ' duplicate records before push (' + _localRecords.length + ' → ' + uniqueRecords.length + ')');
+    _localRecords = uniqueRecords;
+  }
+  
+  var seenPdfKeys = {};
+  var uniquePdfs = [];
+  for (var dp = 0; dp < _localPdfs.length; dp++) {
+    var dpdf = _localPdfs[dp];
+    var pdfKey = dpdf.record_id + '|' + dpdf.file_name.toLowerCase();
+    if (!seenPdfKeys[pdfKey]) {
+      seenPdfKeys[pdfKey] = true;
+      uniquePdfs.push(dpdf);
+    }
+  }
+  if (uniquePdfs.length < _localPdfs.length) {
+    console.warn('[GitHub Push] DEDUP: Removed ' + (_localPdfs.length - uniquePdfs.length) + ' duplicate PDFs before push (' + _localPdfs.length + ' → ' + uniquePdfs.length + ')');
+    _localPdfs = uniquePdfs;
+    saveLocalPdfData();
+  }
+  
   // Build PDF metadata (no base64 content)
   var pdfMeta = _localPdfs.map(function(p) {
     return {
@@ -2415,10 +2446,41 @@ function updateLocalFromRemote(remoteData) {
   // Empty remote data is almost always an API delay or sync error.
   // Only update local records when remote has actual data.
   if (remoteData.records && remoteData.records.length > 0) {
-    _localRecords = remoteData.records;
-    console.log('[updateLocalFromRemote] Updated records from remote: ' + remoteData.records.length);
+    // DEDUPLICATE: Use Map keyed by record ID to remove duplicates
+    var recordMap = {};
+    for (var ri = 0; ri < remoteData.records.length; ri++) {
+      var rec = remoteData.records[ri];
+      if (!recordMap[rec.id]) {
+        recordMap[rec.id] = rec;
+      }
+    }
+    var deduped = Object.keys(recordMap).map(function(k) { return recordMap[k]; });
+    var removedDuplicates = remoteData.records.length - deduped.length;
+    if (removedDuplicates > 0) {
+      console.warn('[updateLocalFromRemote] REMOVED ' + removedDuplicates + ' duplicate records from remote data (' + remoteData.records.length + ' → ' + deduped.length + ')');
+    }
+    _localRecords = deduped;
+    console.log('[updateLocalFromRemote] Updated records from remote: ' + deduped.length + ' (after dedup)');
   } else {
     console.log('[updateLocalFromRemote] Remote data is empty, keeping local data (' + _localRecords.length + ' records)');
+  }
+  
+  // DEDUPLICATE: Remove duplicate pdfMeta entries from remote data
+  if (remoteData.pdfMeta && remoteData.pdfMeta.length > 0) {
+    var pdfMetaMap = {};
+    for (var pm = 0; pm < remoteData.pdfMeta.length; pm++) {
+      var entry = remoteData.pdfMeta[pm];
+      var pdfKey = entry.record_id + '|' + entry.file_name.toLowerCase();
+      if (!pdfMetaMap[pdfKey]) {
+        pdfMetaMap[pdfKey] = entry;
+      }
+    }
+    var dedupedPdfMeta = Object.keys(pdfMetaMap).map(function(k) { return pdfMetaMap[k]; });
+    var removedPdfDupes = remoteData.pdfMeta.length - dedupedPdfMeta.length;
+    if (removedPdfDupes > 0) {
+      console.warn('[updateLocalFromRemote] REMOVED ' + removedPdfDupes + ' duplicate pdfMeta entries (' + remoteData.pdfMeta.length + ' → ' + dedupedPdfMeta.length + ')');
+    }
+    remoteData.pdfMeta = dedupedPdfMeta;
   }
   
   // CRITICAL: Never clear local PDFs/images when remote is empty.
