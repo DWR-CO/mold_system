@@ -5239,12 +5239,6 @@
       "filePath": "pdfs/1_80ml水养焕活面膜上盖.pdf"
     },
     {
-      "id": 38,
-      "record_id": 0,
-      "file_name": "80ml水养焕活面膜顶片.pdf",
-      "filePath": "pdfs/0_80ml水养焕活面膜顶片.pdf"
-    },
-    {
       "id": 39,
       "record_id": 55,
       "file_name": "BQL19007.pdf",
@@ -5261,12 +5255,6 @@
       "record_id": 5,
       "file_name": "BQL2016030001.pdf",
       "filePath": "pdfs/5_BQL2016030001.pdf"
-    },
-    {
-      "id": 42,
-      "record_id": 0,
-      "file_name": "BQL20151100004.pdf",
-      "filePath": "pdfs/0_BQL20151100004.pdf"
     },
     {
       "id": 43,
@@ -6298,6 +6286,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-11-06T08:18:33.986Z",
+  "lastUpdated": "2026-11-06T08:24:10.654Z",
   "version": 2
 }
