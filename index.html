@@ -3531,6 +3531,10 @@ async function handlePdfUpload(e) {
       (result.unmatched > 0 ? '，' + result.unmatched + ' 个未匹配' : ''),
       result.matched > 0 ? 'success' : 'error');
     renderApp();
+    // Auto-push to GitHub after PDF import
+    if (result.matched > 0 && _githubConfig.repo && _githubConfig.token) {
+      setTimeout(function() { pushToGitHub(); }, 1000);
+    }
   } else {
     window._pendingPdfFiles = files;
     document.getElementById('welcomeMatchStatus').innerHTML =
@@ -3575,6 +3579,10 @@ async function handleDataPdfUpload(e) {
     showToast('PDF匹配并上传完成：' + result.matched + ' 个匹配 / ' + uploadedCount + ' 个已上传' +
       (result.unmatched > 0 ? '，' + result.unmatched + ' 个未匹配' : ''),
       uploadedCount > 0 ? 'success' : 'error');
+    // Auto-push to GitHub after PDF import
+    if (_githubConfig.repo && _githubConfig.token) {
+      setTimeout(function() { pushToGitHub(); }, 1000);
+    }
   } else {
     showToast('PDF匹配完成：' + result.matched + ' 个成功 / ' + files.length + ' 个总计' +
       (result.unmatched > 0 ? '，' + result.unmatched + ' 个未匹配' : '') +
