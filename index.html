@@ -6331,6 +6331,16 @@ async function clearAllData() {
   showToast(resetConfig ? '数据和分类配置已清空' : '数据已清空，分类配置已保留', 'success');
 }
 
+// ==================== Auto-clear localStorage on page close ====================
+window.addEventListener('beforeunload', function() {
+  try {
+    localStorage.removeItem('mold_local_media');
+    localStorage.removeItem('github_sync_config');
+    localStorage.removeItem('mold_mapping_config');
+    console.log('[Cleanup] localStorage cleared on page close');
+  } catch(e) {}
+});
+
 // ==================== Init ====================
 document.addEventListener('DOMContentLoaded', async function() {
   document.querySelectorAll('.modal-overlay').forEach(o => {
