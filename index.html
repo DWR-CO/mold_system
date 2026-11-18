@@ -1534,6 +1534,7 @@ function getRecordContentKey(data) {
   var parts = [];
   var anyNonEmpty = false;
   for (var i = 0; i < keys.length; i++) {
+    if (isJunkHeader(keys[i])) continue;
     var v = norm(data[keys[i]]);
     if (v !== '') anyNonEmpty = true;
     parts.push(keys[i] + '=' + v);
@@ -1565,6 +1566,16 @@ function getRecordIdentityKey(data) {
   if (name || contract) return norm(name) + '@@' + norm(contract);
   if (product) return '@@PN@@' + norm(product);
   return '';
+}
+
+// True for header keys that are artifacts of blank Excel header cells and must
+// never be shown/stored: empty/whitespace strings and XLSX placeholders like
+// __EMPTY, __EMPTY_1, __EMPTY_2, ...
+function isJunkHeader(k) {
+  var s = String(k == null ? '' : k).trim();
+  if (s === '') return true;
+  if (/^__EMPTY(_\d+)?$/i.test(s)) return true;
+  return false;
 }
 
 // Check whether an Excel header list contains a dedicated 系统 column.
@@ -1691,21 +1702,8 @@ async function loadFromServer() {
   }
 
   appState.rawData = allData.slice();
-  // DYNAMIC HEADERS: union of keys across ALL records (not just first),
-  // so new columns added by later imports are always recognized.
-  var headerSet = {};
-  var headerList = [];
-  for (var hi = 0; hi < allData.length; hi++) {
-    var hkeys = Object.keys(allData[hi]);
-    for (var hk = 0; hk < hkeys.length; hk++) {
-      if (!headerSet[hkeys[hk]]) {
-        headerSet[hkeys[hk]] = true;
-        headerList.push(hkeys[hk]);
-      }
-    }
-  }
-  appState.headers = headerList;
 
+  // Build mappedData filtered by the current system (or all records at home).
   if (appState.currentSystem) {
     appState.mappedData = [];
     appState.dataOrigIdx = [];
@@ -1727,6 +1725,25 @@ async function loadFromServer() {
     appState.rowImages = allImages;
     appState.pdfFiles = allPdfs;
   }
+
+  // DYNAMIC HEADERS, PER SYSTEM: union of keys of the records actually shown
+  // (mappedData), so active-mold records never display stagnant-only columns
+  // (模具合同编号/流道形式/...) and vice versa. Blank / XLSX '__EMPTY' artifact
+  // headers are filtered out so the display matches the imported file's header.
+  var headerSet = {};
+  var headerList = [];
+  for (var hi = 0; hi < appState.mappedData.length; hi++) {
+    var hkeys = Object.keys(appState.mappedData[hi]);
+    for (var hk = 0; hk < hkeys.length; hk++) {
+      var hname = hkeys[hk];
+      if (isJunkHeader(hname)) continue;
+      if (!headerSet[hname]) {
+        headerSet[hname] = true;
+        headerList.push(hname);
+      }
+    }
+  }
+  appState.headers = headerList;
 
   appState.columnMapping = { classifications: _localConfig.classifications || [], pdfPath: _localConfig.pdfPath || '' };
   appState.displayColumn = _localConfig.displayColumn || '';
@@ -4070,15 +4087,28 @@ async function selectSheet(i) { await parseSheet(window._wb, window._wb.SheetNam
 
 async function parseSheet(wb, sheetName, fileName) {
   const sheet = wb.Sheets[sheetName];
-  const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  var json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   if (!json.length) { showToast('工作表为空','error'); return; }
 
+  // Strip artifact columns created by blank Excel header cells (__EMPTY, __EMPTY_1, ...)
+  json = json.map(function(row) {
+    var clean = {};
+    for (var rk in row) {
+      if (!row.hasOwnProperty(rk)) continue;
+      if (isJunkHeader(rk)) continue;
+      clean[rk] = row[rk];
+    }
+    return clean;
+  });
+
   appState.rawData = json;
-  // DYNAMIC HEADERS: union of keys across all rows (first row may have empty cells)
+  // DYNAMIC HEADERS: union of keys across all cleaned rows (first row may have
+  // empty cells); junk/blank headers already removed above are also skipped here.
   var phSet = {}; var phList = [];
   for (var phi = 0; phi < json.length; phi++) {
     var phk = Object.keys(json[phi]);
     for (var ph = 0; ph < phk.length; ph++) {
+      if (isJunkHeader(phk[ph])) continue;
       if (!phSet[phk[ph]]) { phSet[phk[ph]] = true; phList.push(phk[ph]); }
     }
   }
@@ -5473,6 +5503,29 @@ function filterDataBySystem(system) {
   appState.dataOrigIdx = filteredIdx;
   appState.rowImages = filteredImages;
   appState.pdfFiles = filteredPdfs;
+
+  // Recompute headers PER SYSTEM from the filtered records (skip blank/__EMPTY
+  // artifacts), so entering a subsystem shows only that system's imported columns.
+  var headerSet = {};
+  var headerList = [];
+  for (var hi = 0; hi < filteredData.length; hi++) {
+    var hkeys = Object.keys(filteredData[hi]);
+    for (var hk = 0; hk < hkeys.length; hk++) {
+      var hname = hkeys[hk];
+      if (isJunkHeader(hname)) continue;
+      if (!headerSet[hname]) {
+        headerSet[hname] = true;
+        headerList.push(hname);
+      }
+    }
+  }
+  appState.headers = headerList;
+
+  // If the configured display column is not present in this subsystem, fall back
+  // to the first available header so the classification view stays valid.
+  if (appState.displayColumn && headerList.indexOf(appState.displayColumn) === -1) {
+    appState.displayColumn = headerList.length > 0 ? headerList[0] : '';
+  }
 }
 
 function updateSystemCounts() {
