@@ -1400,7 +1400,28 @@ async function apiImportRecords(records, config) {
     _localImages = [];
     _nextRecordId = 1;
   }
+
+  // Build a set of existing content keys for deduplication (append mode only).
+  // Content key = 模具名称 + 模具合同编号, which uniquely identifies a mold component.
+  // This prevents duplicate records when the same Excel is imported multiple times.
+  var existingContentKeys = {};
+  if (config !== 'replace') {
+    _localRecords.forEach(function(existing) {
+      var ck = getRecordContentKey(existing.data);
+      if (ck) existingContentKeys[ck] = true;
+    });
+  }
+
+  var skippedDuplicates = 0;
   records.forEach(function(r) {
+    // Skip content duplicates (same 模具名称 + 模具合同编号 already exists)
+    var contentKey = getRecordContentKey(r.data);
+    if (contentKey && existingContentKeys[contentKey]) {
+      skippedDuplicates++;
+      console.log('[导入去重] 跳过重复记录:', (r.data && r.data['模具名称']) || 'N/A');
+      return;
+    }
+
     // Assign a unique ID if the record doesn't have one
     if (r.id == null) {
       r.id = _nextRecordId++;
@@ -1408,6 +1429,9 @@ async function apiImportRecords(records, config) {
     // Ensure created_at/updated_at timestamps
     if (!r.created_at) r.created_at = new Date().toISOString();
     if (!r.updated_at) r.updated_at = new Date().toISOString();
+
+    // Mark this content key as seen so later records in the same batch are also deduped
+    if (contentKey) existingContentKeys[contentKey] = true;
 
     // Extract images from import record into _localImages
     if (r.images && r.images.length > 0) {
@@ -1453,7 +1477,30 @@ async function apiImportRecords(records, config) {
   });
   if (config && config !== 'replace' && config !== 'append') _localConfig = config;
   saveLocalPdfData();
-  return { success: true, imported: records.length };
+  if (skippedDuplicates > 0) {
+    console.log('[导入去重] 本次跳过 ' + skippedDuplicates + ' 条重复记录');
+  }
+  return { success: true, imported: records.length - skippedDuplicates, skipped: skippedDuplicates };
+}
+
+// Helper: generate a content-deduplication key from a record's data.
+// Uses 模具名称 + 模具合同编号 (normalized) as the unique identity of a mold component.
+function getRecordContentKey(data) {
+  if (!data) return '';
+  var name = '';
+  var contract = '';
+  for (var k in data) {
+    if (!data.hasOwnProperty(k)) continue;
+    if (k.indexOf('模具名称') !== -1) name = String(data[k] || '').trim();
+    if (k.indexOf('模具合同编号') !== -1 || k.indexOf('合同编号') !== -1 ||
+        k.indexOf('模具合同号') !== -1 || k.indexOf('合同号') !== -1) {
+      if (!contract) contract = String(data[k] || '').trim();
+    }
+  }
+  if (!name && !contract) return '';
+  // Normalize: lowercase, collapse whitespace
+  var norm = function(s) { return String(s).toLowerCase().replace(/\s+/g, ''); };
+  return norm(name) + '@@' + norm(contract);
 }
 
 async function apiClearAll() {
@@ -1504,7 +1551,20 @@ async function apiDeletePdf(recordId, pdfId) {
 }
 
 async function loadFromServer() {
-  var records = _localRecords;
+  // Deduplicate records by content (模具名称 + 模具合同编号) for display.
+  // This ensures duplicate records never appear repeatedly in the UI,
+  // even if _localRecords accumulated content-duplicates from repeated imports.
+  var seenContentKeys = {};
+  var records = [];
+  for (var di = 0; di < _localRecords.length; di++) {
+    var drec = _localRecords[di];
+    var ck = getRecordContentKey(drec.data);
+    // If no content key (empty data), keep it; otherwise dedup by content
+    if (!ck || !seenContentKeys[ck]) {
+      if (ck) seenContentKeys[ck] = true;
+      records.push(drec);
+    }
+  }
   var allData = [];
   var allOrigIdx = [];
   var allImages = {};
@@ -1578,9 +1638,6 @@ function dataUrlToBlob(dataUrl) {
 }
 
 // ==================== GitHub Sync Layer ====================
-// 系统身份标识：写入 data.json，连接仓库时校验，防止连错仓库导致数据互相覆盖
-var SYSTEM_ID = 'mold_system_v2';
-
 var _githubConfig = {
   repo: '',
   token: '',
@@ -1706,17 +1763,13 @@ async function githubGetPdfFile(filePath) {
     }
   });
   
-  // FIX: 只有 404 才表示文件真的不存在
-  // 409 (冲突) 和其他状态码是临时性错误（限流/网络问题/并发冲突），
-  // 绝不能当作"文件不存在"处理，否则会误触发 pdfMeta 清理并清空云端索引！
-  if (response.status === 404) {
-    console.log('[PDF Download] File not found (404): ' + filePath);
+  if (response.status === 404 || response.status === 409) {
+    console.log('[PDF Download] File not found: ' + filePath);
     return null;
   }
-
+  
   if (!response.ok) {
-    // 409/403限流/5xx 等一律视为临时错误，抛出异常交给调用方处理（下次同步会重试）
-    throw new Error('Download PDF failed (temporary): ' + response.status + ' - ' + filePath);
+    throw new Error('Download PDF failed: ' + response.status);
   }
   
   var data = await response.json();
@@ -1800,7 +1853,7 @@ function disconnectGitHub() {
 }
 
 // Save GitHub config from modal
-async function saveGitHubConfig() {
+function saveGitHubConfig() {
   var repo = document.getElementById('githubRepo').value.trim();
   var token = document.getElementById('githubToken').value.trim();
   var branch = document.getElementById('githubBranch').value.trim() || 'main';
@@ -1816,78 +1869,33 @@ async function saveGitHubConfig() {
     return;
   }
   
-  // 备份当前配置，用于校验失败时回滚
-  var prevRepo = _githubConfig.repo, prevToken = _githubConfig.token, prevBranch = _githubConfig.branch;
   _githubConfig.repo = repo;
   _githubConfig.token = token;
   _githubConfig.branch = branch;
   
-  // FIX: 连接前先校验仓库身份，防止连错仓库后数据互相覆盖！
-  // 校验规则：远程 data.json 存在时，必须带 systemId 标识，或记录结构符合模具系统特征
-  try {
-    var remoteFile = await githubGetFile();
-    var remoteData = null;
-    if (remoteFile && remoteFile.content) {
-      try {
-        remoteData = JSON.parse(decodeURIComponent(escape(atob(remoteFile.content.replace(/\s/g, '')))));
-      } catch(pe) {
-        console.warn('GitHub: Failed to parse remote data.json:', pe);
-      }
-    }
-    
-    if (remoteData) {
-      // 远程有 data.json —— 必须是本系统的数据文件才允许连接
-      var rec0 = (remoteData.records && remoteData.records[0] && remoteData.records[0].data) || {};
-      var isOurSystem = remoteData.systemId === SYSTEM_ID 
-        || ('模具名称' in rec0) || ('模具合同编号' in rec0);
-      if (!isOurSystem) {
-        alert('❌ 连接被拒绝！\n\n仓库 ' + repo + ' 的 data.json 不是"模具信息管理系统"的数据文件（缺少系统标识且数据结构不符）。\n\n请确认仓库地址是否正确。');
-        // 回滚配置，连接取消
-        _githubConfig.repo = prevRepo;
-        _githubConfig.token = prevToken;
-        _githubConfig.branch = prevBranch;
-        return;
-      }
-    }
-    // remoteData 为 null（仓库为空/data.json不存在）→ 允许连接，走初始化流程
-    
-    // 校验通过，正式保存配置
-    saveGitHubConfigToStorage();
-    closeGitHubConfig();
-    updateSyncStatus();
-    showToast('仓库校验通过，已连接：' + repo, 'success');
-    
-    // 远程有数据则只拉取（本地数据以远程为准），绝不自动 push；
-    // 仅当远程为空时，经用户确认后才用本地数据初始化
-    var remoteHasRecords = remoteData && remoteData.records && remoteData.records.length > 0;
-    if (remoteHasRecords) {
-      console.log('GitHub: Remote repo has data, pulling instead of pushing...');
-      await syncFromGitHub();
+  saveGitHubConfigToStorage();
+  closeGitHubConfig();
+  updateSyncStatus();
+  
+  // If local data exists, push it to GitHub first, then start auto sync
+  if (_localRecords && _localRecords.length > 0) {
+    console.log('GitHub: Local data exists (' + _localRecords.length + ' records), pushing to GitHub...');
+    pushToGitHub().then(function() {
+      console.log('GitHub: Initial push completed, starting auto sync');
       startAutoSync();
-    } else {
-      var doInit = false;
-      if (_localRecords && _localRecords.length > 0) {
-        doInit = confirm('远程仓库 data.json 为空。\n\n是否用本地数据（' + _localRecords.length + ' 条记录）初始化该仓库？\n\n【确定】= 推送本地数据初始化\n【取消】= 只连接不推送');
-      }
-      if (doInit) {
-        console.log('GitHub: User confirmed, initializing remote with local data...');
-        await pushToGitHub();
-        startAutoSync();
-      } else if (_localRecords && _localRecords.length > 0) {
-        console.log('GitHub: Skipping initial push (user declined), pulling remote state...');
-        await syncFromGitHub();
-        startAutoSync();
-      } else {
-        await syncFromGitHub().then(function() { startAutoSync(); });
-      }
-    }
-  } catch(e) {
-    console.error('GitHub: Repo verification failed:', e);
-    // 校验失败（网络/权限/Token错误）→ 连不上，拒绝连接并回滚
-    alert('❌ 无法连接仓库 ' + repo + '\n\n原因：' + (e.message || '网络或权限错误') + '\n\n请检查：\n1. 仓库名称和分支是否正确\n2. Token 是否有效且有该仓库权限\n3. 网络连接是否正常');
-    _githubConfig.repo = prevRepo;
-    _githubConfig.token = prevToken;
-    _githubConfig.branch = prevBranch;
+    }).catch(function(e) {
+      console.error('GitHub: Initial push failed:', e);
+      // Still start auto sync even if push failed
+      startAutoSync();
+    });
+  } else {
+    // Only pull from GitHub if no local data, then start auto sync
+    syncFromGitHub().then(function() {
+      startAutoSync();
+    }).catch(function(e) {
+      console.error('GitHub: Initial sync failed:', e);
+      startAutoSync();
+    });
   }
 }
 
@@ -2152,8 +2160,7 @@ async function syncFromGitHub() {
         var downloadedPdfs = [];
         var successCount = 0;
         var failCount = 0;
-        var failedPdfMetaIds = []; // 仅记录确认 404（文件真的不存在）的 PDF
-        var transientFailCount = 0; // 临时性失败（网络/限流/中断）计数，不参与清理
+        var failedPdfMetaIds = []; // Track IDs of PDFs that failed (404/not found)
         
         for (var i = 0; i < pdfsToDownload.length; i++) {
           var pdfMeta = pdfsToDownload[i];
@@ -2175,17 +2182,16 @@ async function syncFromGitHub() {
               successCount++;
               console.log('[PDF Download] ' + (i + 1) + '/' + pdfsToDownload.length + ' - ' + pdfMeta.file_name);
             } else {
-              // 404 / Not found - 确认文件不存在，才标记清理
+              // 404 / Not found - mark for cleanup
               failCount++;
               failedPdfMetaIds.push(pdfMeta.id);
-              console.log('[PDF Download] Not found (404, will cleanup): ' + pdfMeta.file_name);
+              console.log('[PDF Download] Not found (will cleanup): ' + pdfMeta.file_name);
             }
           } catch(e) {
-            // FIX: 网络错误/限流/同步中断等临时性失败 —— 只跳过，下次同步重试
-            // 绝不加入 failedPdfMetaIds，避免误删索引导致 pdfMeta 被清空！
+            // Network error or other failure - also mark for cleanup
             failCount++;
-            transientFailCount++;
-            console.warn('[PDF Download] Temporary failure (will retry next sync, NOT cleanup): ' + pdfMeta.file_name + ' - ' + e.message);
+            failedPdfMetaIds.push(pdfMeta.id);
+            console.error('[PDF Download] Failed (will cleanup): ' + pdfMeta.file_name + ' - ' + e.message);
           }
           
           _pdfSyncProgress.current = i + 1;
@@ -2197,28 +2203,30 @@ async function syncFromGitHub() {
           }
         }
         
-        // CRITICAL: Auto-cleanup - 仅清理确认 404 的 PDF 条目
-        // FIX: 1) 临时性失败不再参与清理 2) 不再自动 push 清理结果回 GitHub，
-        //     防止一次网络抖动就永久清空云端 pdfMeta 索引（本次事故的根因）
+        // CRITICAL: Auto-cleanup - remove failed PDF entries from local and remote data
+        // This prevents repeated download attempts for PDFs that don't exist on GitHub
         if (failedPdfMetaIds.length > 0) {
-          console.log('[GitHub Pull] Cleaning up ' + failedPdfMetaIds.length + ' PDF entries that returned 404...');
+          console.log('[GitHub Pull] Cleaning up ' + failedPdfMetaIds.length + ' failed PDF entries...');
           var failedIdSet = {};
           failedPdfMetaIds.forEach(function(id) { failedIdSet[id] = true; });
-
+          
           // Remove from _localPdfs
           var beforeLocalCount = _localPdfs.length;
           _localPdfs = _localPdfs.filter(function(p) { return !failedIdSet[p.id]; });
           if (_localPdfs.length < beforeLocalCount) {
             saveLocalPdfData();
-            console.log('[GitHub Pull] Removed ' + (beforeLocalCount - _localPdfs.length) + ' 404 PDFs from local storage');
+            console.log('[GitHub Pull] Removed ' + (beforeLocalCount - _localPdfs.length) + ' failed PDFs from local storage');
           }
-
-          // Remove from remoteData.pdfMeta (仅影响本次内存中的数据，下次正常推送时生效)
+          
+          // Remove from remoteData.pdfMeta so cleaned data gets pushed back
           if (remoteData.pdfMeta) {
             var beforeRemoteCount = remoteData.pdfMeta.length;
             remoteData.pdfMeta = remoteData.pdfMeta.filter(function(p) { return !failedIdSet[p.id]; });
             if (remoteData.pdfMeta.length < beforeRemoteCount) {
-              console.log('[GitHub Pull] Removed ' + (beforeRemoteCount - remoteData.pdfMeta.length) + ' 404 PDFs from remote pdfMeta (will take effect on next normal push)');
+              console.log('[GitHub Pull] Removed ' + (beforeRemoteCount - remoteData.pdfMeta.length) + ' failed PDFs from remote pdfMeta');
+              // Push cleaned data back to GitHub
+              console.log('[GitHub Pull] Pushing cleaned pdfMeta to GitHub...');
+              await pushToGitHub();
             }
           }
         }
@@ -2276,9 +2284,8 @@ async function syncFromGitHub() {
         renderApp();
         
         if (failCount > 0) {
-          var cleanupMsg = failedPdfMetaIds.length > 0 ? '（已清理' + failedPdfMetaIds.length + '条404无效记录）' : '';
-          var retryMsg = transientFailCount > 0 ? '（' + transientFailCount + '条临时失败，下次同步自动重试）' : '';
-          showToast('PDF同步完成：' + successCount + ' 成功，' + failCount + ' 失败' + cleanupMsg + retryMsg, 'warning');
+          var cleanupMsg = failedPdfMetaIds.length > 0 ? '（已清理' + failedPdfMetaIds.length + '条无效记录）' : '';
+          showToast('PDF同步完成：' + successCount + ' 成功，' + failCount + ' 失败' + cleanupMsg, 'warning');
         }
       } else if (remoteData.pdfs && remoteData.pdfs.length > 0) {
         // Fallback: use old format pdfs directly (with base64 content)
@@ -2333,15 +2340,19 @@ async function pushToGitHub() {
   
   _githubConfig._lastPushTime = now;
   
-  // DEDUPLICATE: Before pushing, ensure no duplicate records or PDFs
+  // DEDUPLICATE: Before pushing, ensure no duplicate records (by ID AND by content) or PDFs
   var seenRecordIds = {};
+  var seenContentKeys = {};
   var uniqueRecords = [];
   for (var di = 0; di < _localRecords.length; di++) {
     var drec = _localRecords[di];
-    if (!seenRecordIds[drec.id]) {
-      seenRecordIds[drec.id] = true;
-      uniqueRecords.push(drec);
-    }
+    var ck = getRecordContentKey(drec.data);
+    // Skip if ID already seen OR content already seen (content-dup with different ID)
+    if (seenRecordIds[drec.id]) continue;
+    if (ck && seenContentKeys[ck]) continue;
+    seenRecordIds[drec.id] = true;
+    if (ck) seenContentKeys[ck] = true;
+    uniqueRecords.push(drec);
   }
   if (uniqueRecords.length < _localRecords.length) {
     console.warn('[GitHub Push] DEDUP: Removed ' + (_localRecords.length - uniqueRecords.length) + ' duplicate records before push (' + _localRecords.length + ' → ' + uniqueRecords.length + ')');
@@ -2376,7 +2387,6 @@ async function pushToGitHub() {
   
   // Build data.json with records + PDF metadata
   var data = {
-    systemId: SYSTEM_ID,  // 系统身份标识，连接仓库时校验用
     records: _localRecords,
     pdfMeta: pdfMeta,
     config: _localConfig,
@@ -2534,15 +2544,19 @@ function updateLocalFromRemote(remoteData) {
   // Empty remote data is almost always an API delay or sync error.
   // Only update local records when remote has actual data.
   if (remoteData.records && remoteData.records.length > 0) {
-    // DEDUPLICATE: Use Map keyed by record ID to remove duplicates
-    var recordMap = {};
+    // DEDUPLICATE: Remove duplicates by record ID AND by content (模具名称+合同编号)
+    var seenIds = {};
+    var seenCk = {};
+    var deduped = [];
     for (var ri = 0; ri < remoteData.records.length; ri++) {
       var rec = remoteData.records[ri];
-      if (!recordMap[rec.id]) {
-        recordMap[rec.id] = rec;
-      }
+      var ck = getRecordContentKey(rec.data);
+      if (seenIds[rec.id]) continue;
+      if (ck && seenCk[ck]) continue;
+      seenIds[rec.id] = true;
+      if (ck) seenCk[ck] = true;
+      deduped.push(rec);
     }
-    var deduped = Object.keys(recordMap).map(function(k) { return recordMap[k]; });
     var removedDuplicates = remoteData.records.length - deduped.length;
     if (removedDuplicates > 0) {
       console.warn('[updateLocalFromRemote] REMOVED ' + removedDuplicates + ' duplicate records from remote data (' + remoteData.records.length + ' → ' + deduped.length + ')');
@@ -2812,17 +2826,7 @@ apiImportRecords = async function(records, config) {
 var _originalApiUploadPdfBlob = apiUploadPdfBlob;
 apiUploadPdfBlob = async function(recordId, blob, fileName) {
   var result = await _originalApiUploadPdfBlob(recordId, blob, fileName);
-  // FIX: PDF 上传成功后自动推送 GitHub（2秒防抖：批量上传时合并为一次推送）
-  if (result && result.success && _githubConfig.repo && _githubConfig.token) {
-    clearTimeout(window._pdfPushTimer);
-    window._pdfPushTimer = setTimeout(function() {
-      pushToGitHub().then(function() {
-        console.log('[GitHub] PDF changes pushed (debounced)');
-      }).catch(function(e) {
-        console.error('[GitHub] PDF push failed:', e);
-      });
-    }, 2000);
-  }
+  // Don't push here - let the batch import handler push once after all PDFs are done
   return result;
 };
 
