@@ -1402,8 +1402,8 @@ async function apiImportRecords(records, config) {
   }
 
   // Index existing records two ways (append mode only):
-  //   existingContentKeys: FULL-content key -> true   (exact-duplicate detection)
-  //   existingByIdentity:  IDENTITY key     -> record (merge target for same mold)
+  //   existingContentKeys: FULL-content key -> true        (exact-duplicate detection)
+  //   existingByIdentity:  IDENTITY key     -> [records]   (merge candidates for same mold)
   var existingContentKeys = {};
   var existingByIdentity = {};
   if (config !== 'replace') {
@@ -1411,7 +1411,10 @@ async function apiImportRecords(records, config) {
       var ck = getRecordContentKey(existing.data);
       if (ck) existingContentKeys[ck] = true;
       var ik = getRecordIdentityKey(existing.data);
-      if (ik && !existingByIdentity[ik]) existingByIdentity[ik] = existing;
+      if (ik) {
+        if (!existingByIdentity[ik]) existingByIdentity[ik] = [];
+        existingByIdentity[ik].push(existing);
+      }
     });
   }
 
@@ -1465,42 +1468,55 @@ async function apiImportRecords(records, config) {
       return;
     }
 
-    // 2) Same mold IDENTITY but content differs -> MERGE added/changed fields.
+    // 2) Same mold IDENTITY: merge ONLY if it's a genuine "same record with
+    //    added columns" case (no conflicting non-empty value on a shared column).
+    //    If every candidate conflicts, these are DIFFERENT records that merely
+    //    share a name -> fall through and add as a new record.
     if (identityKey && existingByIdentity[identityKey]) {
-      var target = existingByIdentity[identityKey];
-      var changed = false;
-      for (var key in r.data) {
-        if (!r.data.hasOwnProperty(key)) continue;
-        var newVal = r.data[key];
-        var newStr = (newVal === null || newVal === undefined) ? '' : String(newVal).trim();
-        var oldVal = target.data[key];
-        var oldStr = (oldVal === null || oldVal === undefined) ? '' : String(oldVal).trim();
-        // Only overwrite when incoming value is non-empty AND different, so we
-        // never blank out existing data; we DO add brand-new columns.
-        if (newStr !== '' && newStr !== oldStr) {
-          target.data[key] = newVal;
-          changed = true;
+      var candidates = existingByIdentity[identityKey];
+      var target = null;
+      for (var ci = 0; ci < candidates.length; ci++) {
+        if (!hasMergeConflict(candidates[ci].data, r.data)) { target = candidates[ci]; break; }
+      }
+      if (target) {
+        var changed = false;
+        for (var key in r.data) {
+          if (!r.data.hasOwnProperty(key)) continue;
+          var newVal = r.data[key];
+          var newStr = (newVal === null || newVal === undefined) ? '' : String(newVal).trim();
+          var oldVal = target.data[key];
+          var oldStr = (oldVal === null || oldVal === undefined) ? '' : String(oldVal).trim();
+          // Only fill when existing is empty (or the column is brand-new). Never
+          // overwrite a differing non-empty value -> no data is destroyed.
+          if (newStr !== '' && oldStr === '') {
+            target.data[key] = newVal;
+            changed = true;
+          }
         }
+        if (changed) {
+          target.updated_at = new Date().toISOString();
+          var newCk = getRecordContentKey(target.data);
+          if (newCk) existingContentKeys[newCk] = true; // future identical rows dedup
+          mergedCount++;
+        }
+        // Attach any media carried by the incoming row to the existing record.
+        attachImages(target.id, r.images);
+        attachPdfs(target.id, r.pdfs);
+        return;
       }
-      if (changed) {
-        target.updated_at = new Date().toISOString();
-        var newCk = getRecordContentKey(target.data);
-        if (newCk) existingContentKeys[newCk] = true; // future identical rows dedup
-        mergedCount++;
-      }
-      // Attach any media carried by the incoming row to the existing record.
-      attachImages(target.id, r.images);
-      attachPdfs(target.id, r.pdfs);
-      return;
+      // else: all candidates conflict -> treat as a new distinct record below
     }
 
-    // 3) NEW record -> add.
+    // 3) NEW record -> add (also covers identity-match-but-conflict rows).
     if (r.id == null) r.id = _nextRecordId++;
     if (!r.created_at) r.created_at = new Date().toISOString();
     if (!r.updated_at) r.updated_at = new Date().toISOString();
 
     if (contentKey) existingContentKeys[contentKey] = true;
-    if (identityKey && !existingByIdentity[identityKey]) existingByIdentity[identityKey] = r;
+    if (identityKey) {
+      if (!existingByIdentity[identityKey]) existingByIdentity[identityKey] = [];
+      existingByIdentity[identityKey].push({ id: r.id, data: r.data });
+    }
 
     attachImages(r.id, r.images);
     attachPdfs(r.id, r.pdfs);
@@ -1566,6 +1582,26 @@ function getRecordIdentityKey(data) {
   if (name || contract) return norm(name) + '@@' + norm(contract);
   if (product) return '@@PN@@' + norm(product);
   return '';
+}
+
+// True when two rows CONFLICT, i.e. there is at least one column where BOTH have
+// a non-empty value and those values differ (ignoring case/whitespace). Rows that
+// conflict are DIFFERENT records (e.g. same 模具名称 but different 结构部件) and
+// must never be merged. A row that only ADDS columns (all shared non-empty values
+// agree) has no conflict and can be safely merged into the existing record.
+function hasMergeConflict(existingData, incomingData) {
+  if (!existingData || !incomingData) return false;
+  var norm = function(s) { return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ''); };
+  for (var key in incomingData) {
+    if (!incomingData.hasOwnProperty(key)) continue;
+    var iv = incomingData[key];
+    var is = (iv === null || iv === undefined) ? '' : String(iv).trim();
+    if (is === '') continue; // incoming empty -> never conflicts, just won't overwrite
+    var ev = existingData[key];
+    var es = (ev === null || ev === undefined) ? '' : String(ev).trim();
+    if (es !== '' && norm(iv) !== norm(ev)) return true;
+  }
+  return false;
 }
 
 // True for header keys that are artifacts of blank Excel header cells and must
@@ -2472,7 +2508,10 @@ function mergeRemoteIntoLocalForPush(remoteObj) {
     var lck = getRecordContentKey(lr.data);
     if (lck) localContent[lck] = true;
     var lik = getRecordIdentityKey(lr.data);
-    if (lik && !localIdentity[lik]) localIdentity[lik] = lr;
+    if (lik) {
+      if (!localIdentity[lik]) localIdentity[lik] = [];
+      localIdentity[lik].push(lr);
+    }
     localIdSet[lr.id] = true;
   }
 
@@ -2485,22 +2524,39 @@ function mergeRemoteIntoLocalForPush(remoteObj) {
     // Already have an exact copy -> skip
     if (rck && localContent[rck]) continue;
 
-    // Same mold identity exists locally -> merge remote's non-empty fields in
+    // Same mold identity exists locally -> merge the remote record into a
+    // candidate ONLY if it doesn't CONFLICT (i.e. it just adds/fills columns).
+    // When merging, never overwrite a differing non-empty local value. If every
+    // candidate conflicts, this remote row is a genuinely DIFFERENT record that
+    // merely shares a name (e.g. different 结构部件) -> fall through and append.
     if (rik && localIdentity[rik]) {
-      var target = localIdentity[rik];
-      for (var key in rr.data) {
-        if (!rr.data.hasOwnProperty(key)) continue;
-        var rv = rr.data[key];
-        var rs = (rv === null || rv === undefined) ? '' : String(rv).trim();
-        var ov = target.data[key];
-        var os = (ov === null || ov === undefined) ? '' : String(ov).trim();
-        if (rs !== '' && rs !== os) target.data[key] = rv;
+      var candidates = localIdentity[rik];
+      var target = null;
+      for (var ci = 0; ci < candidates.length; ci++) {
+        if (!hasMergeConflict(candidates[ci].data, rr.data)) { target = candidates[ci]; break; }
       }
-      mergedInto++;
-      continue;
+      if (target) {
+        var changed = false;
+        for (var key in rr.data) {
+          if (!rr.data.hasOwnProperty(key)) continue;
+          var rv = rr.data[key];
+          var rs = (rv === null || rv === undefined) ? '' : String(rv).trim();
+          var ov = target.data[key];
+          var os = (ov === null || ov === undefined) ? '' : String(ov).trim();
+          // Fold remote data in only where local is empty -> nothing is destroyed.
+          if (rs !== '' && os === '') {
+            target.data[key] = rv;
+            changed = true;
+          }
+        }
+        if (changed) mergedInto++;
+        continue;
+      }
+      // else: all candidates conflict -> append as a new distinct record below
     }
 
-    // Not present locally -> append the remote record (avoid ID collision)
+    // Not present locally (or identity-conflicting) -> append the remote record
+    // (avoid ID collision)
     var newRec = JSON.parse(JSON.stringify(rr));
     if (newRec.id == null || localIdSet[newRec.id]) {
       newRec.id = _nextRecordId++;
@@ -2509,7 +2565,10 @@ function mergeRemoteIntoLocalForPush(remoteObj) {
     }
     localIdSet[newRec.id] = true;
     if (rck) localContent[rck] = true;
-    if (rik && !localIdentity[rik]) localIdentity[rik] = newRec;
+    if (rik) {
+      if (!localIdentity[rik]) localIdentity[rik] = [];
+      localIdentity[rik].push(newRec);
+    }
     _localRecords.push(newRec);
     added++;
   }
