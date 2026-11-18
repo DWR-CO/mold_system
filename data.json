@@ -15595,30 +15595,6 @@
       "filePath": "pdfs/11_60g草本美白防晒盖.pdf"
     },
     {
-      "id": 10,
-      "record_id": 90,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-底.pdf",
-      "filePath": "pdfs/90_三生花_沁水无瑕花酿粉底液_气垫型_-底.pdf"
-    },
-    {
-      "id": 11,
-      "record_id": 89,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-盖.pdf",
-      "filePath": "pdfs/89_三生花_沁水无瑕花酿粉底液_气垫型_-盖.pdf"
-    },
-    {
-      "id": 12,
-      "record_id": 91,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-内底.pdf",
-      "filePath": "pdfs/91_三生花_沁水无瑕花酿粉底液_气垫型_-内底.pdf"
-    },
-    {
-      "id": 13,
-      "record_id": 92,
-      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-前钮.pdf",
-      "filePath": "pdfs/92_三生花_沁水无瑕花酿粉底液_气垫型_-前钮.pdf"
-    },
-    {
       "id": 14,
       "record_id": 106,
       "file_name": "施美洗护身体乳188ml瓶.pdf",
@@ -15641,36 +15617,6 @@
       "record_id": 109,
       "file_name": "施美洗护沐浴露750ml瓶.pdf",
       "filePath": "pdfs/109_施美洗护沐浴露750ml瓶.pdf"
-    },
-    {
-      "id": 18,
-      "record_id": 81,
-      "file_name": "百雀羚帧颜系列高能面霜50G肩套.pdf",
-      "filePath": "pdfs/81_百雀羚帧颜系列高能面霜50G肩套.pdf"
-    },
-    {
-      "id": 19,
-      "record_id": 82,
-      "file_name": "百雀羚帧颜系列高能面霜50G螺牙大盖.pdf",
-      "filePath": "pdfs/82_百雀羚帧颜系列高能面霜50G螺牙大盖.pdf"
-    },
-    {
-      "id": 20,
-      "record_id": 79,
-      "file_name": "百雀羚帧颜系列高能面霜50G上盖.pdf",
-      "filePath": "pdfs/79_百雀羚帧颜系列高能面霜50G上盖.pdf"
-    },
-    {
-      "id": 21,
-      "record_id": 83,
-      "file_name": "百雀羚帧颜系列高能面霜50G外瓶.pdf",
-      "filePath": "pdfs/83_百雀羚帧颜系列高能面霜50G外瓶.pdf"
-    },
-    {
-      "id": 22,
-      "record_id": 80,
-      "file_name": "百雀羚帧颜系列高能面霜50G压盖.pdf",
-      "filePath": "pdfs/80_百雀羚帧颜系列高能面霜50G压盖.pdf"
     },
     {
       "id": 23,
@@ -16717,12 +16663,6 @@
       "filePath": "pdfs/132_100ml草本CS水乳-玻璃瓶.pdf"
     },
     {
-      "id": 197,
-      "record_id": 128,
-      "file_name": "100ml草本CS水-外盖.pdf",
-      "filePath": "pdfs/128_100ml草本CS水-外盖.pdf"
-    },
-    {
       "id": 198,
       "record_id": 139,
       "file_name": "100ml草本帧颜水乳-玻璃瓶.pdf",
@@ -16961,6 +16901,66 @@
       "record_id": 649,
       "file_name": "经典双色-盖.pdf",
       "filePath": "pdfs/649_经典双色-盖.pdf"
+    },
+    {
+      "id": 10,
+      "record_id": 90,
+      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-底.pdf",
+      "filePath": "pdfs/90_三生花_沁水无瑕花酿粉底液_气垫型_-底.pdf"
+    },
+    {
+      "id": 11,
+      "record_id": 89,
+      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-盖.pdf",
+      "filePath": "pdfs/89_三生花_沁水无瑕花酿粉底液_气垫型_-盖.pdf"
+    },
+    {
+      "id": 12,
+      "record_id": 91,
+      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-内底.pdf",
+      "filePath": "pdfs/91_三生花_沁水无瑕花酿粉底液_气垫型_-内底.pdf"
+    },
+    {
+      "id": 13,
+      "record_id": 92,
+      "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-前钮.pdf",
+      "filePath": "pdfs/92_三生花_沁水无瑕花酿粉底液_气垫型_-前钮.pdf"
+    },
+    {
+      "id": 18,
+      "record_id": 81,
+      "file_name": "百雀羚帧颜系列高能面霜50G肩套.pdf",
+      "filePath": "pdfs/81_百雀羚帧颜系列高能面霜50G肩套.pdf"
+    },
+    {
+      "id": 19,
+      "record_id": 82,
+      "file_name": "百雀羚帧颜系列高能面霜50G螺牙大盖.pdf",
+      "filePath": "pdfs/82_百雀羚帧颜系列高能面霜50G螺牙大盖.pdf"
+    },
+    {
+      "id": 20,
+      "record_id": 79,
+      "file_name": "百雀羚帧颜系列高能面霜50G上盖.pdf",
+      "filePath": "pdfs/79_百雀羚帧颜系列高能面霜50G上盖.pdf"
+    },
+    {
+      "id": 21,
+      "record_id": 83,
+      "file_name": "百雀羚帧颜系列高能面霜50G外瓶.pdf",
+      "filePath": "pdfs/83_百雀羚帧颜系列高能面霜50G外瓶.pdf"
+    },
+    {
+      "id": 22,
+      "record_id": 80,
+      "file_name": "百雀羚帧颜系列高能面霜50G压盖.pdf",
+      "filePath": "pdfs/80_百雀羚帧颜系列高能面霜50G压盖.pdf"
+    },
+    {
+      "id": 197,
+      "record_id": 128,
+      "file_name": "100ml草本CS水-外盖.pdf",
+      "filePath": "pdfs/128_100ml草本CS水-外盖.pdf"
     }
   ],
   "config": {
@@ -16972,6 +16972,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-11-18T07:34:06.594Z",
+  "lastUpdated": "2026-11-18T07:34:36.561Z",
   "version": 2
 }
