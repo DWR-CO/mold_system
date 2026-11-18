@@ -1489,6 +1489,7 @@ function getRecordContentKey(data) {
   if (!data) return '';
   var name = '';
   var contract = '';
+  var product = '';
   for (var k in data) {
     if (!data.hasOwnProperty(k)) continue;
     if (k.indexOf('模具名称') !== -1) name = String(data[k] || '').trim();
@@ -1496,11 +1497,48 @@ function getRecordContentKey(data) {
         k.indexOf('模具合同号') !== -1 || k.indexOf('合同号') !== -1) {
       if (!contract) contract = String(data[k] || '').trim();
     }
+    if (k.indexOf('产品名称') !== -1) product = String(data[k] || '').trim();
   }
-  if (!name && !contract) return '';
   // Normalize: lowercase, collapse whitespace
   var norm = function(s) { return String(s).toLowerCase().replace(/\s+/g, ''); };
-  return norm(name) + '@@' + norm(contract);
+  // STAGNANT identity (unchanged): 模具名称 + 合同编号
+  if (name || contract) return norm(name) + '@@' + norm(contract);
+  // ACTIVE identity fallback (molds without 模具名称/合同编号): 产品名称
+  if (product) return '@@PN@@' + norm(product);
+  return '';
+}
+
+// Check whether an Excel header list contains a dedicated 系统 column.
+function hasSystemColumn(headers) {
+  for (var i = 0; i < (headers || []).length; i++) {
+    if (String(headers[i]).trim() === '系统') return true;
+  }
+  return false;
+}
+
+// Stamp a record's 系统 field with priority:
+//   1. valid existing value in the Excel row (呆滞 / 活跃)
+//   2. the batch default (resolved from current view or user prompt)
+//   3. fallback '呆滞'
+function stampRecordSystem(rowData, batchDefault) {
+  if (!rowData) return;
+  var sysVal = rowData['系统'];
+  if (sysVal === '呆滞' || sysVal === '活跃') return; // respect explicit per-row value
+  rowData['系统'] = (batchDefault === '活跃' || batchDefault === '呆滞') ? batchDefault : '呆滞';
+}
+
+// Resolve which system a batch of imported records belongs to.
+// If the Excel already has a 系统 column, returns null (per-row values are used).
+// Otherwise uses the current view context, or prompts the user when importing from home.
+function resolveImportBatchSystem() {
+  if (hasSystemColumn(appState.headers)) return null; // per-row
+  if (appState.currentSystem === '活跃' || appState.currentSystem === '呆滞') {
+    return appState.currentSystem; // importing from within a system view
+  }
+  // Importing from home with no 系统 column -> ask the user
+  var choice = prompt('这批导入的数据属于哪个系统？\n输入 1 = 呆滞模具\n输入 2 = 活跃模具\n（直接取消默认呆滞）', '1');
+  if (choice === null) return '呆滞';
+  return String(choice).trim() === '2' ? '活跃' : '呆滞';
 }
 
 async function apiClearAll() {
@@ -1593,7 +1631,20 @@ async function loadFromServer() {
   }
 
   appState.rawData = allData.slice();
-  appState.headers = records.length > 0 ? Object.keys(records[0].data) : [];
+  // DYNAMIC HEADERS: union of keys across ALL records (not just first),
+  // so new columns added by later imports are always recognized.
+  var headerSet = {};
+  var headerList = [];
+  for (var hi = 0; hi < allData.length; hi++) {
+    var hkeys = Object.keys(allData[hi]);
+    for (var hk = 0; hk < hkeys.length; hk++) {
+      if (!headerSet[hkeys[hk]]) {
+        headerSet[hkeys[hk]] = true;
+        headerList.push(hkeys[hk]);
+      }
+    }
+  }
+  appState.headers = headerList;
 
   if (appState.currentSystem) {
     appState.mappedData = [];
@@ -3699,18 +3750,36 @@ async function autoMatchPdfs(files) {
     if (contractCol) break;
   }
 
-  console.log('[PDF匹配] 模具名称列:', moldCol, '合同编号列:', contractCol);
+  // Find the product name column (产品名称) used for ACTIVE mold PDF matching.
+  // Active molds match PDFs one-to-one by 产品名称 == PDF filename.
+  var productNameCol = null;
+  for (var h = 0; h < appState.headers.length; h++) {
+    if (appState.headers[h].indexOf('产品名称') !== -1) { productNameCol = appState.headers[h]; break; }
+  }
 
-  if (!moldCol && !contractCol) return { matched: 0, unmatched: 0 };
+  console.log('[PDF匹配] 模具名称列:', moldCol, '合同编号列:', contractCol, '产品名称列:', productNameCol);
+
+  if (!moldCol && !contractCol && !productNameCol) return { matched: 0, unmatched: 0 };
 
   // Build mold name → mappedDataIdx lookup (one-to-one, first match wins)
   // CRITICAL: Use mappedData (filtered view) instead of rawData (full array)
   // because dataOrigIdx only contains indices for the filtered/mapped records.
   // Using rawData indices would cause index mismatch and wrong record matching.
   var sourceData = appState.mappedData || appState.rawData;
+
+  // Classify a record's system. Only records explicitly tagged 活跃 are treated as
+  // active molds (matched by 产品名称). Everything else (呆滞 or untagged legacy data)
+  // keeps the original 模具名称 / 合同编号 matching.
+  function recordSystem(rec) {
+    return (rec && rec['系统'] === '活跃') ? '活跃' : '呆滞';
+  }
+
+  // Build mold name → mappedDataIdx lookup (one-to-one, first match wins).
+  // STAGNANT records only.
   var nameMap = {};
   if (moldCol) {
     for (var i = 0; i < sourceData.length; i++) {
+      if (recordSystem(sourceData[i]) === '活跃') continue; // active handled via productNameMap
       var moldName = sourceData[i][moldCol];
       if (moldName != null && String(moldName).trim()) {
         var key = normalizeMoldName(String(moldName));
@@ -3721,10 +3790,12 @@ async function autoMatchPdfs(files) {
     }
   }
 
-  // Build contract number → [mappedDataIdx] lookup (one-to-many)
+  // Build contract number → [mappedDataIdx] lookup (one-to-many).
+  // STAGNANT records only.
   var contractMap = {};
   if (contractCol) {
     for (var i = 0; i < sourceData.length; i++) {
+      if (recordSystem(sourceData[i]) === '活跃') continue; // active handled via productNameMap
       var contractNum = sourceData[i][contractCol];
       if (contractNum != null && String(contractNum).trim()) {
         var cKey = normalizeMoldName(String(contractNum));
@@ -3732,6 +3803,22 @@ async function autoMatchPdfs(files) {
           contractMap[cKey] = [];
         }
         contractMap[cKey].push(i);
+      }
+    }
+  }
+
+  // Build product name → mappedDataIdx lookup (one-to-one).
+  // ACTIVE records only: 产品名称 == PDF filename, single match, no fan-out.
+  var productNameMap = {};
+  if (productNameCol) {
+    for (var i = 0; i < sourceData.length; i++) {
+      if (recordSystem(sourceData[i]) !== '活跃') continue; // only active molds
+      var pname = sourceData[i][productNameCol];
+      if (pname != null && String(pname).trim()) {
+        var pKey = normalizeMoldName(String(pname));
+        if (!productNameMap.hasOwnProperty(pKey)) {
+          productNameMap[pKey] = i;
+        }
       }
     }
   }
@@ -3761,8 +3848,16 @@ async function autoMatchPdfs(files) {
 
     var matchedIndices = [];
 
-    // PRIORITY 1: Try mold name first (as per user requirement)
-    if (nameMap.hasOwnProperty(lookupKey)) {
+    // PRIORITY 0: ACTIVE molds match by 产品名称 == PDF filename, one-to-one (no fan-out).
+    if (productNameMap.hasOwnProperty(lookupKey)) {
+      console.log('[PDF匹配] ✓ 产品名称匹配成功（活跃模具，一一对应）, 索引:', productNameMap[lookupKey]);
+      matchedIndices.push(productNameMap[lookupKey]);
+      var activeRecord = sourceData[productNameMap[lookupKey]];
+      console.log('[PDF匹配]   匹配记录详情 - 产品名称:', activeRecord[productNameCol]);
+    }
+
+    // PRIORITY 1: Try mold name first (as per user requirement) - STAGNANT records
+    if (matchedIndices.length === 0 && nameMap.hasOwnProperty(lookupKey)) {
       console.log('[PDF匹配] ✓ 模具名称匹配成功（优先）, 索引:', nameMap[lookupKey]);
       matchedIndices.push(nameMap[lookupKey]);
       // Log the matched record details for debugging
@@ -3918,7 +4013,15 @@ async function parseSheet(wb, sheetName, fileName) {
   if (!json.length) { showToast('工作表为空','error'); return; }
 
   appState.rawData = json;
-  appState.headers = Object.keys(json[0]);
+  // DYNAMIC HEADERS: union of keys across all rows (first row may have empty cells)
+  var phSet = {}; var phList = [];
+  for (var phi = 0; phi < json.length; phi++) {
+    var phk = Object.keys(json[phi]);
+    for (var ph = 0; ph < phk.length; ph++) {
+      if (!phSet[phk[ph]]) { phSet[phk[ph]] = true; phList.push(phk[ph]); }
+    }
+  }
+  appState.headers = phList;
 
   // Save existing images and index mapping before extractSheetImages resets them
   window._prevImages = JSON.parse(JSON.stringify(appState.rowImages));
@@ -4034,19 +4137,17 @@ async function importAppend() {
   };
   appState.displayColumn = savedConfig.displayColumn || '';
 
-  // Auto-match pending PDFs BEFORE preparing import records
-  if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
-    var matchResult = await autoMatchPdfs(window._pendingPdfFiles);
-    window._pendingPdfFiles = [];
-    if (matchResult.matched > 0) {
-      showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
-        (matchResult.unmatched > 0 ? '，' + matchResult.unmatched + ' 个未匹配' : ''), 'success');
-    }
-  }
+  // Resolve which system this imported batch belongs to (呆滞 / 活跃).
+  // If the Excel already has a 系统 column, per-row values win (batchSystem === null).
+  var batchSystem = resolveImportBatchSystem();
+
+  // NOTE: PDF auto-matching is DEFERRED until AFTER the new records are imported
+  // and loadFromServer() rebuilds mappedData, so PDFs also match against the NEW data.
 
   // Prepare new records from rawData (newly parsed Excel)
   var importRecords = [];
   for (var i = 0; i < appState.rawData.length; i++) {
+    stampRecordSystem(appState.rawData[i], batchSystem);
     var rec = { data: appState.rawData[i], images: [], pdfs: [] };
     var imgs = appState.rowImages[i];
     if (imgs) {
@@ -4092,10 +4193,29 @@ async function importAppend() {
     return;
   }
 
-  // Reload everything from server
+  // Reload everything from server (rebuilds mappedData / dataOrigIdx with the new records)
   await loadFromServer();
+
+  // Deferred PDF auto-match: now that the newly imported records exist in mappedData,
+  // PDFs selected together with this Excel import can match against them too.
+  // (Active molds: 产品名称 == filename one-to-one; Stagnant: 模具名称 / 合同编号 — unchanged.)
+  if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
+    var pendingPdfs = window._pendingPdfFiles;
+    window._pendingPdfFiles = [];
+    var matchResult = await autoMatchPdfs(pendingPdfs);
+    if (matchResult.matched > 0) {
+      showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
+        (matchResult.unmatched > 0 ? '，' + matchResult.unmatched + ' 个未匹配' : ''), 'success');
+    }
+  }
+
   renderApp();
   showToast('已追加 ' + result.imported + ' 条记录' + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : '') + '，当前共 ' + appState.mappedData.length + ' 条', 'success');
+
+  // Auto-push newly imported records + matched PDFs to GitHub
+  if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
+    setTimeout(function() { pushToGitHub(); }, 1000);
+  }
 }
 
 async function importReplaceReuse(fileName) {
@@ -4122,19 +4242,15 @@ async function importReplaceReuse(fileName) {
   };
   appState.displayColumn = savedConfig.displayColumn || '';
 
-  // Auto-match pending PDFs BEFORE preparing import records
-  if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
-    var matchResult = await autoMatchPdfs(window._pendingPdfFiles);
-    window._pendingPdfFiles = [];
-    if (matchResult.matched > 0) {
-      showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
-        (matchResult.unmatched > 0 ? '，' + matchResult.unmatched + ' 个未匹配' : ''), 'success');
-    }
-  }
+  // Resolve which system this imported batch belongs to (呆滞 / 活跃).
+  var batchSystem = resolveImportBatchSystem();
+
+  // NOTE: PDF auto-match deferred until AFTER replace + loadFromServer rebuilds mappedData.
 
   // Prepare new records
   var importRecords = [];
   for (var i = 0; i < appState.rawData.length; i++) {
+    stampRecordSystem(appState.rawData[i], batchSystem);
     var rec = { data: appState.rawData[i], images: [], pdfs: [] };
     var imgs = appState.rowImages[i];
     if (imgs) {
@@ -4185,8 +4301,25 @@ async function importReplaceReuse(fileName) {
 
   // Reload from server
   await loadFromServer();
+
+  // Deferred PDF auto-match against the freshly replaced + reloaded records.
+  if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
+    var pendingPdfs = window._pendingPdfFiles;
+    window._pendingPdfFiles = [];
+    var matchResult = await autoMatchPdfs(pendingPdfs);
+    if (matchResult.matched > 0) {
+      showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
+        (matchResult.unmatched > 0 ? '，' + matchResult.unmatched + ' 个未匹配' : ''), 'success');
+    }
+  }
+
   renderApp();
   showToast('已替换数据，复用 ' + savedConfig.classifications.length + ' 级分类配置，导入 ' + result.imported + ' 条记录' + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : ''), 'success');
+
+  // Auto-push replaced records + matched PDFs to GitHub
+  if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
+    setTimeout(function() { pushToGitHub(); }, 1000);
+  }
 }
 
 async function importReplaceNew(fileName) {
@@ -5037,20 +5170,15 @@ async function confirmMapping() {
   // Save config locally
   saveMappingConfig();
 
-  // Auto-match pending PDFs BEFORE preparing import records
-  // This ensures matched PDFs are included in the server import
-  if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
-    var matchResult = await autoMatchPdfs(window._pendingPdfFiles);
-    window._pendingPdfFiles = [];
-    if (matchResult.matched > 0) {
-      showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
-        (matchResult.unmatched > 0 ? '，' + matchResult.unmatched + ' 个未匹配' : ''), 'success');
-    }
-  }
+  // Resolve which system this imported batch belongs to (呆滞 / 活跃).
+  var batchSystem = resolveImportBatchSystem();
+
+  // NOTE: PDF auto-match deferred until AFTER loadFromServer rebuilds mappedData.
 
   // Prepare records for server import
   var importRecords = [];
   for (var i = 0; i < appState.rawData.length; i++) {
+    stampRecordSystem(appState.rawData[i], batchSystem);
     var rec = { data: appState.rawData[i], images: [], pdfs: [] };
     var imgs = appState.rowImages[i];
     if (imgs) {
@@ -5102,8 +5230,24 @@ async function confirmMapping() {
   // Load from server to sync state
   await loadFromServer();
 
+  // Deferred PDF auto-match against the newly imported + reloaded records.
+  if (window._pendingPdfFiles && window._pendingPdfFiles.length > 0) {
+    var pendingPdfs = window._pendingPdfFiles;
+    window._pendingPdfFiles = [];
+    var matchResult = await autoMatchPdfs(pendingPdfs);
+    if (matchResult.matched > 0) {
+      showToast('PDF自动匹配：' + matchResult.matched + ' 个成功' +
+        (matchResult.unmatched > 0 ? '，' + matchResult.unmatched + ' 个未匹配' : ''), 'success');
+    }
+  }
+
   renderApp();
   showToast('共 ' + selectedCols.length + ' 级分类，已保存 ' + importResult.imported + ' 条记录' + (importResult.skipped > 0 ? '，跳过 ' + importResult.skipped + ' 条重复' : ''), 'success');
+
+  // Auto-push newly saved records + matched PDFs to GitHub
+  if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
+    setTimeout(function() { pushToGitHub(); }, 1000);
+  }
 }
 
 // ==================== Adjust Classification ====================
