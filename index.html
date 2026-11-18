@@ -5799,6 +5799,33 @@ function renderClassificationLevel(area, depth) {
   }
 }
 
+// Resolve a human-readable record title.
+//  - Stagnant molds: 模具名称
+//  - Active molds (模具名称 empty): 产品名称 column (matched by substring,
+//    since the exact header key may vary across imported files)
+//  - Otherwise: the configured displayColumn value
+//  - Last resort: "记录 N"
+function getRecordDisplayName(row, idx) {
+  var fallback = '记录 ' + ((idx != null ? idx : 0) + 1);
+  if (!row) return fallback;
+  var moldName = row['模具名称'];
+  if (moldName != null && String(moldName).trim() !== '') return String(moldName).trim();
+  if (appState.headers) {
+    for (var h = 0; h < appState.headers.length; h++) {
+      var col = appState.headers[h];
+      if (col && String(col).indexOf('产品名称') !== -1) {
+        var pv = row[col];
+        if (pv != null && String(pv).trim() !== '') return String(pv).trim();
+      }
+    }
+  }
+  if (appState.displayColumn) {
+    var dv = row[appState.displayColumn];
+    if (dv != null && String(dv).trim() !== '') return String(dv).trim();
+  }
+  return fallback;
+}
+
 function renderLeafLevel(area) {
   var data = getFilteredData();
   if (!data.length) {
@@ -5815,7 +5842,7 @@ function renderLeafLevel(area) {
       var row = item.row;
       var idx = item.idx;
       var origIdx = appState.dataOrigIdx[idx];
-      var displayValue = row['模具名称'] || ('记录 ' + (idx + 1));
+      var displayValue = getRecordDisplayName(row, idx);
       var images = appState.rowImages[origIdx] || [];
       var hasImage = images.length > 0;
 
@@ -5826,6 +5853,11 @@ function renderLeafLevel(area) {
       skipCols[displayCol] = true;
       skipCols['模具名称'] = true;
       skipCols['供应商代码'] = true;
+      for (var sk = 0; sk < appState.headers.length; sk++) {
+        if (appState.headers[sk] && String(appState.headers[sk]).indexOf('产品名称') !== -1) {
+          skipCols[appState.headers[sk]] = true;
+        }
+      }
 
       var keyFields = appState.headers.filter(function(h) {
         return !skipCols[h] && row[h] != null && String(row[h]).trim() !== '';
@@ -5872,7 +5904,7 @@ function showDetail(idx) {
   const row = appState.mappedData[idx];
   const mapping = appState.columnMapping;
   const origIdx = appState.dataOrigIdx[idx];
-  const title = row['模具名称'] || `记录 ${idx+1}`;
+  const title = getRecordDisplayName(row, idx);
   const images = appState.rowImages[origIdx] || [];
   const pdfEntry = appState.pdfFiles[origIdx];
   console.log('[showDetail] idx:', idx, 'origIdx:', origIdx, 'type:', typeof origIdx);
@@ -6045,7 +6077,7 @@ function viewDrawing(idx) {
   const images = appState.rowImages[origIdx] || [];
   if (!images.length) { showToast('该行暂无图纸','info'); return; }
   const row = appState.mappedData[idx];
-  const title = row['模具名称'] || `记录 ${idx+1}`;
+  const title = getRecordDisplayName(row, idx);
 
   if (images.length === 1) {
     viewImage(images[0], `${title} - 图纸`);
@@ -6118,7 +6150,7 @@ function viewImageByRef(mappedIdx, imgIdx) {
   const images = appState.rowImages[origIdx] || [];
   if (!images[imgIdx]) return;
   const row = appState.mappedData[mappedIdx];
-  const title = (row ? row[appState.displayColumn] : '') || `记录 ${mappedIdx+1}`;
+  const title = getRecordDisplayName(row, mappedIdx);
   viewImage(images[imgIdx], `${title} - 图纸${imgIdx+1}`);
 }
 
@@ -6128,7 +6160,7 @@ function viewPdf(idx, pdfIdx) {
   const mapping = appState.columnMapping;
   const origIdx = appState.dataOrigIdx[idx];
   const pdfPath = mapping.pdfPath ? row[mapping.pdfPath] : '';
-  const title = row['模具名称'] || `记录 ${idx+1}`;
+  const title = getRecordDisplayName(row, idx);
   document.getElementById('pdfTitle').textContent = `PDF - ${title}`;
   const body = document.getElementById('pdfBody');
 
