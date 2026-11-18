@@ -1401,109 +1401,168 @@ async function apiImportRecords(records, config) {
     _nextRecordId = 1;
   }
 
-  // Build a set of existing content keys for deduplication (append mode only).
-  // Content key = 模具名称 + 模具合同编号, which uniquely identifies a mold component.
-  // This prevents duplicate records when the same Excel is imported multiple times.
+  // Index existing records two ways (append mode only):
+  //   existingContentKeys: FULL-content key -> true   (exact-duplicate detection)
+  //   existingByIdentity:  IDENTITY key     -> record (merge target for same mold)
   var existingContentKeys = {};
+  var existingByIdentity = {};
   if (config !== 'replace') {
     _localRecords.forEach(function(existing) {
       var ck = getRecordContentKey(existing.data);
       if (ck) existingContentKeys[ck] = true;
+      var ik = getRecordIdentityKey(existing.data);
+      if (ik && !existingByIdentity[ik]) existingByIdentity[ik] = existing;
     });
   }
 
+  // Attach incoming images to a target record id.
+  function attachImages(targetId, images) {
+    if (!images || !images.length) return;
+    images.forEach(function(img) {
+      var base64 = typeof img === 'string' ? img : (img.base64 || img.dataUrl || img);
+      if (base64) {
+        _localImages.push({
+          id: _nextImgId++,
+          record_id: targetId,
+          file_name: img.file_name || img.fileName || 'image.png',
+          file_path: 'local://image',
+          sort_order: 0,
+          base64: base64
+        });
+      }
+    });
+  }
+
+  // Attach incoming PDFs to a target record id.
+  function attachPdfs(targetId, pdfs) {
+    if (!pdfs || !pdfs.length) return;
+    pdfs.forEach(function(p) {
+      var dataUrl = p.dataUrl || p.base64 || (typeof p === 'string' ? p : null);
+      if (dataUrl) {
+        _localPdfs.push({
+          id: _nextPdfId++,
+          record_id: targetId,
+          file_name: p.fileName || p.file_name || 'document.pdf',
+          file_path: 'local://pdf',
+          sort_order: 0,
+          base64: dataUrl
+        });
+      }
+    });
+  }
+
+  var addedCount = 0;
+  var mergedCount = 0;
   var skippedDuplicates = 0;
+
   records.forEach(function(r) {
-    // Skip content duplicates (same 模具名称 + 模具合同编号 already exists)
     var contentKey = getRecordContentKey(r.data);
+    var identityKey = getRecordIdentityKey(r.data);
+
+    // 1) EXACT duplicate (all fields identical) -> skip.
     if (contentKey && existingContentKeys[contentKey]) {
       skippedDuplicates++;
-      console.log('[导入去重] 跳过重复记录:', (r.data && r.data['模具名称']) || 'N/A');
       return;
     }
 
-    // Assign a unique ID if the record doesn't have one
-    if (r.id == null) {
-      r.id = _nextRecordId++;
+    // 2) Same mold IDENTITY but content differs -> MERGE added/changed fields.
+    if (identityKey && existingByIdentity[identityKey]) {
+      var target = existingByIdentity[identityKey];
+      var changed = false;
+      for (var key in r.data) {
+        if (!r.data.hasOwnProperty(key)) continue;
+        var newVal = r.data[key];
+        var newStr = (newVal === null || newVal === undefined) ? '' : String(newVal).trim();
+        var oldVal = target.data[key];
+        var oldStr = (oldVal === null || oldVal === undefined) ? '' : String(oldVal).trim();
+        // Only overwrite when incoming value is non-empty AND different, so we
+        // never blank out existing data; we DO add brand-new columns.
+        if (newStr !== '' && newStr !== oldStr) {
+          target.data[key] = newVal;
+          changed = true;
+        }
+      }
+      if (changed) {
+        target.updated_at = new Date().toISOString();
+        var newCk = getRecordContentKey(target.data);
+        if (newCk) existingContentKeys[newCk] = true; // future identical rows dedup
+        mergedCount++;
+      }
+      // Attach any media carried by the incoming row to the existing record.
+      attachImages(target.id, r.images);
+      attachPdfs(target.id, r.pdfs);
+      return;
     }
-    // Ensure created_at/updated_at timestamps
+
+    // 3) NEW record -> add.
+    if (r.id == null) r.id = _nextRecordId++;
     if (!r.created_at) r.created_at = new Date().toISOString();
     if (!r.updated_at) r.updated_at = new Date().toISOString();
 
-    // Mark this content key as seen so later records in the same batch are also deduped
     if (contentKey) existingContentKeys[contentKey] = true;
+    if (identityKey && !existingByIdentity[identityKey]) existingByIdentity[identityKey] = r;
 
-    // Extract images from import record into _localImages
-    if (r.images && r.images.length > 0) {
-      r.images.forEach(function(img) {
-        var base64 = typeof img === 'string' ? img : (img.base64 || img.dataUrl || img);
-        if (base64) {
-          _localImages.push({
-            id: _nextImgId++,
-            record_id: r.id,
-            file_name: img.file_name || img.fileName || 'image.png',
-            file_path: 'local://image',
-            sort_order: 0,
-            base64: base64
-          });
-        }
-      });
-    }
+    attachImages(r.id, r.images);
+    attachPdfs(r.id, r.pdfs);
 
-    // Extract PDFs from import record into _localPdfs
-    if (r.pdfs && r.pdfs.length > 0) {
-      r.pdfs.forEach(function(p) {
-        var dataUrl = p.dataUrl || p.base64 || (typeof p === 'string' ? p : null);
-        if (dataUrl) {
-          _localPdfs.push({
-            id: _nextPdfId++,
-            record_id: r.id,
-            file_name: p.fileName || p.file_name || 'document.pdf',
-            file_path: 'local://pdf',
-            sort_order: 0,
-            base64: dataUrl
-          });
-        }
-      });
-    }
-
-    // Push clean record (without images/pdfs arrays) to _localRecords
     _localRecords.push({
       id: r.id,
       data: r.data,
       created_at: r.created_at,
       updated_at: r.updated_at
     });
+    addedCount++;
   });
+
   if (config && config !== 'replace' && config !== 'append') _localConfig = config;
   saveLocalPdfData();
-  if (skippedDuplicates > 0) {
-    console.log('[导入去重] 本次跳过 ' + skippedDuplicates + ' 条重复记录');
+  if (skippedDuplicates > 0 || mergedCount > 0) {
+    console.log('[导入] 新增 ' + addedCount + ' 条，合并 ' + mergedCount + ' 条，跳过重复 ' + skippedDuplicates + ' 条');
   }
-  return { success: true, imported: records.length - skippedDuplicates, skipped: skippedDuplicates };
+  return { success: true, imported: addedCount, merged: mergedCount, skipped: skippedDuplicates };
 }
 
-// Helper: generate a content-deduplication key from a record's data.
-// Uses 模具名称 + 模具合同编号 (normalized) as the unique identity of a mold component.
+// Helper: FULL-CONTENT key. Built from EVERY field of the row so that ONLY
+// truly identical rows are treated as exact duplicates. Returns '' when all
+// fields are empty (so empty/garbage rows are never wrongly collapsed).
 function getRecordContentKey(data) {
   if (!data) return '';
+  var keys = Object.keys(data);
+  if (!keys.length) return '';
+  keys.sort();
+  var norm = function(s) { return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ''); };
+  var parts = [];
+  var anyNonEmpty = false;
+  for (var i = 0; i < keys.length; i++) {
+    var v = norm(data[keys[i]]);
+    if (v !== '') anyNonEmpty = true;
+    parts.push(keys[i] + '=' + v);
+  }
+  if (!anyNonEmpty) return ''; // entirely empty row -> no content key
+  return parts.join('||');
+}
+
+// Helper: mold IDENTITY key. Used to decide MERGE-vs-ADD for rows that are not
+// exact duplicates but describe the same mold (e.g. an updated Excel that fills
+// in previously-empty columns).
+//   Stagnant identity: 模具名称 + 合同编号
+//   Active identity:   产品名称 (when 模具名称/合同编号 are absent)
+function getRecordIdentityKey(data) {
+  if (!data) return '';
+  var norm = function(s) { return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ''); };
   var name = '';
   var contract = '';
   var product = '';
   for (var k in data) {
     if (!data.hasOwnProperty(k)) continue;
     if (k.indexOf('模具名称') !== -1) name = String(data[k] || '').trim();
-    if (k.indexOf('模具合同编号') !== -1 || k.indexOf('合同编号') !== -1 ||
-        k.indexOf('模具合同号') !== -1 || k.indexOf('合同号') !== -1) {
-      if (!contract) contract = String(data[k] || '').trim();
+    if (!contract && (k.indexOf('模具合同编号') !== -1 || k.indexOf('合同编号') !== -1 ||
+        k.indexOf('模具合同号') !== -1 || k.indexOf('合同号') !== -1)) {
+      contract = String(data[k] || '').trim();
     }
     if (k.indexOf('产品名称') !== -1) product = String(data[k] || '').trim();
   }
-  // Normalize: lowercase, collapse whitespace
-  var norm = function(s) { return String(s).toLowerCase().replace(/\s+/g, ''); };
-  // STAGNANT identity (unchanged): 模具名称 + 合同编号
   if (name || contract) return norm(name) + '@@' + norm(contract);
-  // ACTIVE identity fallback (molds without 模具名称/合同编号): 产品名称
   if (product) return '@@PN@@' + norm(product);
   return '';
 }
@@ -1589,7 +1648,8 @@ async function apiDeletePdf(recordId, pdfId) {
 }
 
 async function loadFromServer() {
-  // Deduplicate records by content (模具名称 + 模具合同编号) for display.
+  // Deduplicate records by FULL-ROW CONTENT for display: only rows whose every
+  // field is identical collapse, so distinct molds are always shown.
   // This ensures duplicate records never appear repeatedly in the UI,
   // even if _localRecords accumulated content-duplicates from repeated imports.
   var seenContentKeys = {};
@@ -2595,7 +2655,8 @@ function updateLocalFromRemote(remoteData) {
   // Empty remote data is almost always an API delay or sync error.
   // Only update local records when remote has actual data.
   if (remoteData.records && remoteData.records.length > 0) {
-    // DEDUPLICATE: Remove duplicates by record ID AND by content (模具名称+合同编号)
+    // DEDUPLICATE: Remove duplicates by record ID AND by FULL-ROW CONTENT
+    // (only rows whose every field is identical are collapsed; distinct molds are kept)
     var seenIds = {};
     var seenCk = {};
     var deduped = [];
@@ -4210,7 +4271,7 @@ async function importAppend() {
   }
 
   renderApp();
-  showToast('已追加 ' + result.imported + ' 条记录' + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : '') + '，当前共 ' + appState.mappedData.length + ' 条', 'success');
+  showToast('已追加 ' + result.imported + ' 条记录' + (result.merged > 0 ? '，合并 ' + result.merged + ' 条' : '') + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : '') + '，当前共 ' + appState.mappedData.length + ' 条', 'success');
 
   // Auto-push newly imported records + matched PDFs to GitHub
   if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
@@ -4314,7 +4375,7 @@ async function importReplaceReuse(fileName) {
   }
 
   renderApp();
-  showToast('已替换数据，复用 ' + savedConfig.classifications.length + ' 级分类配置，导入 ' + result.imported + ' 条记录' + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : ''), 'success');
+  showToast('已替换数据，复用 ' + savedConfig.classifications.length + ' 级分类配置，导入 ' + result.imported + ' 条记录' + (result.merged > 0 ? '，合并 ' + result.merged + ' 条' : '') + (result.skipped > 0 ? '，跳过 ' + result.skipped + ' 条重复' : ''), 'success');
 
   // Auto-push replaced records + matched PDFs to GitHub
   if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
@@ -5242,7 +5303,7 @@ async function confirmMapping() {
   }
 
   renderApp();
-  showToast('共 ' + selectedCols.length + ' 级分类，已保存 ' + importResult.imported + ' 条记录' + (importResult.skipped > 0 ? '，跳过 ' + importResult.skipped + ' 条重复' : ''), 'success');
+  showToast('共 ' + selectedCols.length + ' 级分类，新增 ' + importResult.imported + ' 条' + (importResult.merged > 0 ? '，合并 ' + importResult.merged + ' 条' : '') + (importResult.skipped > 0 ? '，跳过 ' + importResult.skipped + ' 条重复' : ''), 'success');
 
   // Auto-push newly saved records + matched PDFs to GitHub
   if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
