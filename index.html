@@ -2447,7 +2447,78 @@ async function syncFromGitHub() {
 }
 
 // Push local data to GitHub (records + PDFs as separate files)
-async function pushToGitHub() {
+// SAFETY: additively fold remote records into local before pushing, so a
+// leaner/partial local (e.g. the startup pull from GitHub was still in flight
+// due to network delay) can never DELETE records that already exist remotely.
+// Keys are content/identity based (not raw IDs) so multi-user ID collisions
+// don't wrongly drop data.
+function mergeRemoteIntoLocalForPush(remoteObj) {
+  if (!remoteObj || !remoteObj.records || !remoteObj.records.length) return;
+  var first = remoteObj.records[0];
+  var hasExpectedFields = first.data && (
+    '模具状态' in first.data || '模具合同编号' in first.data ||
+    '模具名称' in first.data || '产品名称' in first.data
+  );
+  if (!hasExpectedFields) {
+    console.warn('[GitHub Push] Remote schema mismatch, skipping remote-merge safety');
+    return;
+  }
+
+  var localContent = {};
+  var localIdentity = {};
+  var localIdSet = {};
+  for (var li = 0; li < _localRecords.length; li++) {
+    var lr = _localRecords[li];
+    var lck = getRecordContentKey(lr.data);
+    if (lck) localContent[lck] = true;
+    var lik = getRecordIdentityKey(lr.data);
+    if (lik && !localIdentity[lik]) localIdentity[lik] = lr;
+    localIdSet[lr.id] = true;
+  }
+
+  var added = 0, mergedInto = 0;
+  for (var ri = 0; ri < remoteObj.records.length; ri++) {
+    var rr = remoteObj.records[ri];
+    var rck = getRecordContentKey(rr.data);
+    var rik = getRecordIdentityKey(rr.data);
+
+    // Already have an exact copy -> skip
+    if (rck && localContent[rck]) continue;
+
+    // Same mold identity exists locally -> merge remote's non-empty fields in
+    if (rik && localIdentity[rik]) {
+      var target = localIdentity[rik];
+      for (var key in rr.data) {
+        if (!rr.data.hasOwnProperty(key)) continue;
+        var rv = rr.data[key];
+        var rs = (rv === null || rv === undefined) ? '' : String(rv).trim();
+        var ov = target.data[key];
+        var os = (ov === null || ov === undefined) ? '' : String(ov).trim();
+        if (rs !== '' && rs !== os) target.data[key] = rv;
+      }
+      mergedInto++;
+      continue;
+    }
+
+    // Not present locally -> append the remote record (avoid ID collision)
+    var newRec = JSON.parse(JSON.stringify(rr));
+    if (newRec.id == null || localIdSet[newRec.id]) {
+      newRec.id = _nextRecordId++;
+    } else if (newRec.id >= _nextRecordId) {
+      _nextRecordId = newRec.id + 1;
+    }
+    localIdSet[newRec.id] = true;
+    if (rck) localContent[rck] = true;
+    if (rik && !localIdentity[rik]) localIdentity[rik] = newRec;
+    _localRecords.push(newRec);
+    added++;
+  }
+  if (added || mergedInto) {
+    console.log('[GitHub Push] Remote-merge safety: folded in ' + added + ' new + ' + mergedInto + ' merged remote records (local now ' + _localRecords.length + ')');
+  }
+}
+
+async function pushToGitHub(forceReplace) {
   if (!_githubConfig.repo || !_githubConfig.token) {
     console.error('[GitHub Push] ERROR: GitHub not configured!');
     console.error('[GitHub Push] Please configure GitHub sync first by running:');
@@ -2472,7 +2543,29 @@ async function pushToGitHub() {
   }
   
   _githubConfig._lastPushTime = now;
-  
+
+  // SAFETY: fold remote data into local before pushing (additive) so a leaner /
+  // partial local — e.g. the startup pull from GitHub was still in flight due to
+  // network delay — can never overwrite data.json with FEWER records. Skipped only
+  // for an explicit full-replace push (forceReplace === true).
+  var remotePdfMetaForPush = [];
+  if (!forceReplace) {
+    try {
+      var remoteFile = await githubGetFile();
+      if (remoteFile && remoteFile.content) {
+        var remoteObj = JSON.parse(decodeURIComponent(escape(atob(remoteFile.content.replace(/\n/g, '')))));
+        if (remoteObj && remoteObj.records && remoteObj.records.length > 0) {
+          mergeRemoteIntoLocalForPush(remoteObj);
+        }
+        if (remoteObj && remoteObj.pdfMeta && remoteObj.pdfMeta.length > 0) {
+          remotePdfMetaForPush = remoteObj.pdfMeta;
+        }
+      }
+    } catch(e) {
+      console.warn('[GitHub Push] Remote-merge safety skipped (could not read remote):', e.message);
+    }
+  }
+
   // DEDUPLICATE: Before pushing, ensure no duplicate records (by ID AND by content) or PDFs
   var seenRecordIds = {};
   var seenContentKeys = {};
@@ -2517,6 +2610,33 @@ async function pushToGitHub() {
       filePath: getPdfFilePath(p.record_id, p.file_name)
     };
   });
+
+  // Union with remote pdfMeta so PDFs that exist only on GitHub aren't dropped
+  // by this push (their files already live in pdfs/, we just keep the metadata).
+  if (remotePdfMetaForPush.length > 0) {
+    var pdfMetaSeen = {};
+    for (var qm = 0; qm < pdfMeta.length; qm++) {
+      pdfMetaSeen[pdfMeta[qm].record_id + '|' + String(pdfMeta[qm].file_name).toLowerCase()] = true;
+    }
+    var remoteMetaAdded = 0;
+    for (var rp = 0; rp < remotePdfMetaForPush.length; rp++) {
+      var rm = remotePdfMetaForPush[rp];
+      var rkey = rm.record_id + '|' + String(rm.file_name).toLowerCase();
+      if (!pdfMetaSeen[rkey]) {
+        pdfMetaSeen[rkey] = true;
+        pdfMeta.push({
+          id: rm.id,
+          record_id: rm.record_id,
+          file_name: rm.file_name,
+          filePath: rm.filePath || getPdfFilePath(rm.record_id, rm.file_name)
+        });
+        remoteMetaAdded++;
+      }
+    }
+    if (remoteMetaAdded > 0) {
+      console.log('[GitHub Push] Preserved ' + remoteMetaAdded + ' remote-only PDF metadata entries');
+    }
+  }
   
   // Build data.json with records + PDF metadata
   var data = {
@@ -4414,7 +4534,7 @@ async function importReplaceReuse(fileName) {
 
   // Auto-push replaced records + matched PDFs to GitHub
   if (_githubConfig && _githubConfig.repo && _githubConfig.token) {
-    setTimeout(function() { pushToGitHub(); }, 1000);
+    setTimeout(function() { pushToGitHub(true); }, 1000);
   }
 }
 
