@@ -17296,6 +17296,30 @@
       "filePath": "pdfs/649_经典双色-盖.pdf"
     },
     {
+      "id": 238,
+      "record_id": 666,
+      "file_name": "60g草本美白防晒-内盖.pdf",
+      "filePath": "pdfs/666_60g草本美白防晒-内盖.pdf"
+    },
+    {
+      "id": 239,
+      "record_id": 660,
+      "file_name": "100ml玉琮乳（两件式盖-降本）-外盖.pdf",
+      "filePath": "pdfs/660_100ml玉琮乳_两件式盖-降本_-外盖.pdf"
+    },
+    {
+      "id": 240,
+      "record_id": 656,
+      "file_name": "100ml草本CS水-玻璃瓶.pdf",
+      "filePath": "pdfs/656_100ml草本CS水-玻璃瓶.pdf"
+    },
+    {
+      "id": 241,
+      "record_id": 662,
+      "file_name": "30&50ml草本帧颜精华液-盖.pdf",
+      "filePath": "pdfs/662_30_50ml草本帧颜精华液-盖.pdf"
+    },
+    {
       "id": 10,
       "record_id": 90,
       "file_name": "三生花 沁水无瑕花酿粉底液（气垫型）-底.pdf",
@@ -17365,6 +17389,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-11-23T07:43:21.248Z",
+  "lastUpdated": "2026-11-23T07:43:54.344Z",
   "version": 2
 }
