@@ -17151,6 +17151,384 @@
       "record_id": 365,
       "file_name": "220ml水嫩3.0倍现盈透精华水-玻璃瓶.pdf",
       "filePath": "pdfs/365_220ml水嫩3.0倍现盈透精华水-玻璃瓶.pdf"
+    },
+    {
+      "id": 179,
+      "record_id": 362,
+      "file_name": "220g甘油一号-瓶.pdf",
+      "filePath": "pdfs/362_220g甘油一号-瓶.pdf"
+    },
+    {
+      "id": 180,
+      "record_id": 361,
+      "file_name": "20ml水嫩水乳-瓶.pdf",
+      "filePath": "pdfs/361_20ml水嫩水乳-瓶.pdf"
+    },
+    {
+      "id": 181,
+      "record_id": 360,
+      "file_name": "20ml水嫩水乳-内塞.pdf",
+      "filePath": "pdfs/360_20ml水嫩水乳-内塞.pdf"
+    },
+    {
+      "id": 182,
+      "record_id": 359,
+      "file_name": "20ml水嫩水乳-盖.pdf",
+      "filePath": "pdfs/359_20ml水嫩水乳-盖.pdf"
+    },
+    {
+      "id": 183,
+      "record_id": 358,
+      "file_name": "20ml男士小样-瓶.pdf",
+      "filePath": "pdfs/358_20ml男士小样-瓶.pdf"
+    },
+    {
+      "id": 184,
+      "record_id": 357,
+      "file_name": "20ml男士小样-盖.pdf",
+      "filePath": "pdfs/357_20ml男士小样-盖.pdf"
+    },
+    {
+      "id": 185,
+      "record_id": 352,
+      "file_name": "20ml草本帧颜眼部精华露-玻璃瓶.pdf",
+      "filePath": "pdfs/352_20ml草本帧颜眼部精华露-玻璃瓶.pdf"
+    },
+    {
+      "id": 186,
+      "record_id": 351,
+      "file_name": "20ml草本帧颜水乳小样-瓶.pdf",
+      "filePath": "pdfs/351_20ml草本帧颜水乳小样-瓶.pdf"
+    },
+    {
+      "id": 187,
+      "record_id": 350,
+      "file_name": "20ml草本帧颜水乳小样-盖.pdf",
+      "filePath": "pdfs/350_20ml草本帧颜水乳小样-盖.pdf"
+    },
+    {
+      "id": 188,
+      "record_id": 341,
+      "file_name": "20g水能量倒立瓶眼霜-瓶.pdf",
+      "filePath": "pdfs/341_20g水能量倒立瓶眼霜-瓶.pdf"
+    },
+    {
+      "id": 189,
+      "record_id": 339,
+      "file_name": "20g水能量倒立瓶眼霜-盖.pdf",
+      "filePath": "pdfs/339_20g水能量倒立瓶眼霜-盖.pdf"
+    },
+    {
+      "id": 190,
+      "record_id": 338,
+      "file_name": "20g精华油玻-玻璃瓶.pdf",
+      "filePath": "pdfs/338_20g精华油玻-玻璃瓶.pdf"
+    },
+    {
+      "id": 191,
+      "record_id": 337,
+      "file_name": "200ml卸妆水-瓶.pdf",
+      "filePath": "pdfs/337_200ml卸妆水-瓶.pdf"
+    },
+    {
+      "id": 192,
+      "record_id": 329,
+      "file_name": "20&30ml肌初精华-盖.pdf",
+      "filePath": "pdfs/329_20_30ml肌初精华-盖.pdf"
+    },
+    {
+      "id": 193,
+      "record_id": 328,
+      "file_name": "20&30ml肌初精华-玻璃瓶.pdf",
+      "filePath": "pdfs/328_20_30ml肌初精华-玻璃瓶.pdf"
+    },
+    {
+      "id": 194,
+      "record_id": 321,
+      "file_name": "170g经典甘油-瓶.pdf",
+      "filePath": "pdfs/321_170g经典甘油-瓶.pdf"
+    },
+    {
+      "id": 195,
+      "record_id": 320,
+      "file_name": "170g经典甘油-盖.pdf",
+      "filePath": "pdfs/320_170g经典甘油-盖.pdf"
+    },
+    {
+      "id": 196,
+      "record_id": 319,
+      "file_name": "165ml经典杏仁蜜-瓶.pdf",
+      "filePath": "pdfs/319_165ml经典杏仁蜜-瓶.pdf"
+    },
+    {
+      "id": 197,
+      "record_id": 317,
+      "file_name": "15ml新水嫩眼部精华-玻璃瓶.pdf",
+      "filePath": "pdfs/317_15ml新水嫩眼部精华-玻璃瓶.pdf"
+    },
+    {
+      "id": 198,
+      "record_id": 316,
+      "file_name": "15ml通用小样-瓶.pdf",
+      "filePath": "pdfs/316_15ml通用小样-瓶.pdf"
+    },
+    {
+      "id": 199,
+      "record_id": 314,
+      "file_name": "15ml通用小样-盖.pdf",
+      "filePath": "pdfs/314_15ml通用小样-盖.pdf"
+    },
+    {
+      "id": 200,
+      "record_id": 300,
+      "file_name": "15ml草本CS肌活眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/300_15ml草本CS肌活眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 201,
+      "record_id": 299,
+      "file_name": "15g御颜紧弹修护精华眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/299_15g御颜紧弹修护精华眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 202,
+      "record_id": 298,
+      "file_name": "15g新水嫩眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/298_15g新水嫩眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 203,
+      "record_id": 284,
+      "file_name": "15g肌初眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/284_15g肌初眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 204,
+      "record_id": 281,
+      "file_name": "15g草本帧颜眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/281_15g草本帧颜眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 205,
+      "record_id": 272,
+      "file_name": "15g草本WTS鲜妍新肌眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/272_15g草本WTS鲜妍新肌眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 206,
+      "record_id": 262,
+      "file_name": "15g草本CS眼霜-玻璃瓶.pdf",
+      "filePath": "pdfs/262_15g草本CS眼霜-玻璃瓶.pdf"
+    },
+    {
+      "id": 207,
+      "record_id": 261,
+      "file_name": "150ml水清漾保湿精华乳-玻璃瓶.pdf",
+      "filePath": "pdfs/261_150ml水清漾保湿精华乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 208,
+      "record_id": 259,
+      "file_name": "150ml男士控油焕能洁面乳-瓶.pdf",
+      "filePath": "pdfs/259_150ml男士控油焕能洁面乳-瓶.pdf"
+    },
+    {
+      "id": 209,
+      "record_id": 253,
+      "file_name": "150g经典SOD蜜-瓶.pdf",
+      "filePath": "pdfs/253_150g经典SOD蜜-瓶.pdf"
+    },
+    {
+      "id": 210,
+      "record_id": 251,
+      "file_name": "120ml舒润液体洁面-瓶.pdf",
+      "filePath": "pdfs/251_120ml舒润液体洁面-瓶.pdf"
+    },
+    {
+      "id": 211,
+      "record_id": 250,
+      "file_name": "115ml经典保湿露-瓶.pdf",
+      "filePath": "pdfs/250_115ml经典保湿露-瓶.pdf"
+    },
+    {
+      "id": 212,
+      "record_id": 249,
+      "file_name": "115ml经典保湿露-盖.pdf",
+      "filePath": "pdfs/249_115ml经典保湿露-盖.pdf"
+    },
+    {
+      "id": 213,
+      "record_id": 244,
+      "file_name": "110g水嫩面膜-玻璃瓶.pdf",
+      "filePath": "pdfs/244_110g水嫩面膜-玻璃瓶.pdf"
+    },
+    {
+      "id": 214,
+      "record_id": 234,
+      "file_name": "10ml水嫩水乳-瓶.pdf",
+      "filePath": "pdfs/234_10ml水嫩水乳-瓶.pdf"
+    },
+    {
+      "id": 215,
+      "record_id": 233,
+      "file_name": "10ml水嫩水乳-盖.pdf",
+      "filePath": "pdfs/233_10ml水嫩水乳-盖.pdf"
+    },
+    {
+      "id": 216,
+      "record_id": 226,
+      "file_name": "100ml帧颜男士水乳-玻璃瓶.pdf",
+      "filePath": "pdfs/226_100ml帧颜男士水乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 217,
+      "record_id": 223,
+      "file_name": "100ml玉琮乳-装饰圈.pdf",
+      "filePath": "pdfs/223_100ml玉琮乳-装饰圈.pdf"
+    },
+    {
+      "id": 218,
+      "record_id": 222,
+      "file_name": "100ml玉琮乳-内盖.pdf",
+      "filePath": "pdfs/222_100ml玉琮乳-内盖.pdf"
+    },
+    {
+      "id": 219,
+      "record_id": 221,
+      "file_name": "100ml玉琮乳-外盖.pdf",
+      "filePath": "pdfs/221_100ml玉琮乳-外盖.pdf"
+    },
+    {
+      "id": 220,
+      "record_id": 209,
+      "file_name": "100ml玉琮水盖子两件式（降本）-外盖.pdf",
+      "filePath": "pdfs/209_100ml玉琮水盖子两件式_降本_-外盖.pdf"
+    },
+    {
+      "id": 221,
+      "record_id": 208,
+      "file_name": "100ml玉琮水-内塞.pdf",
+      "filePath": "pdfs/208_100ml玉琮水-内塞.pdf"
+    },
+    {
+      "id": 222,
+      "record_id": 207,
+      "file_name": "100ml玉琮水-装饰圈.pdf",
+      "filePath": "pdfs/207_100ml玉琮水-装饰圈.pdf"
+    },
+    {
+      "id": 223,
+      "record_id": 206,
+      "file_name": "100ml玉琮水-内盖.pdf",
+      "filePath": "pdfs/206_100ml玉琮水-内盖.pdf"
+    },
+    {
+      "id": 224,
+      "record_id": 205,
+      "file_name": "100ml玉琮水-外盖2.pdf",
+      "filePath": "pdfs/205_100ml玉琮水-外盖2.pdf"
+    },
+    {
+      "id": 225,
+      "record_id": 201,
+      "file_name": "100ml玉琮水-外盖.pdf",
+      "filePath": "pdfs/201_100ml玉琮水-外盖.pdf"
+    },
+    {
+      "id": 226,
+      "record_id": 187,
+      "file_name": "100ml新水嫩水（45Q）-玻璃瓶.pdf",
+      "filePath": "pdfs/187_100ml新水嫩水_45Q_-玻璃瓶.pdf"
+    },
+    {
+      "id": 227,
+      "record_id": 184,
+      "file_name": "100ml新水嫩乳-玻璃瓶.pdf",
+      "filePath": "pdfs/184_100ml新水嫩乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 228,
+      "record_id": 180,
+      "file_name": "100ml新男士水乳-玻璃瓶.pdf",
+      "filePath": "pdfs/180_100ml新男士水乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 229,
+      "record_id": 177,
+      "file_name": "100ml水能量精华水-玻璃瓶.pdf",
+      "filePath": "pdfs/177_100ml水能量精华水-玻璃瓶.pdf"
+    },
+    {
+      "id": 230,
+      "record_id": 166,
+      "file_name": "100ml水嫩水-玻璃瓶.pdf",
+      "filePath": "pdfs/166_100ml水嫩水-玻璃瓶.pdf"
+    },
+    {
+      "id": 231,
+      "record_id": 162,
+      "file_name": "100ml水嫩3.0乳露-玻璃瓶2.pdf",
+      "filePath": "pdfs/162_100ml水嫩3.0乳露-玻璃瓶2.pdf"
+    },
+    {
+      "id": 232,
+      "record_id": 161,
+      "file_name": "100ml水嫩3.0水-玻璃瓶.pdf",
+      "filePath": "pdfs/161_100ml水嫩3.0水-玻璃瓶.pdf"
+    },
+    {
+      "id": 233,
+      "record_id": 160,
+      "file_name": "100ml水嫩3.0乳露-玻璃瓶.pdf",
+      "filePath": "pdfs/160_100ml水嫩3.0乳露-玻璃瓶.pdf"
+    },
+    {
+      "id": 234,
+      "record_id": 158,
+      "file_name": "100ml水嫩3.0-外盖.pdf",
+      "filePath": "pdfs/158_100ml水嫩3.0-外盖.pdf"
+    },
+    {
+      "id": 235,
+      "record_id": 149,
+      "file_name": "100ml男士净衡保湿水乳-玻璃瓶.pdf",
+      "filePath": "pdfs/149_100ml男士净衡保湿水乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 236,
+      "record_id": 145,
+      "file_name": "100ml老男士水乳-玻璃瓶.pdf",
+      "filePath": "pdfs/145_100ml老男士水乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 237,
+      "record_id": 140,
+      "file_name": "100ml草本帧颜水乳-玻璃瓶.pdf",
+      "filePath": "pdfs/140_100ml草本帧颜水乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 238,
+      "record_id": 133,
+      "file_name": "100ml草本CS乳-玻璃瓶.pdf",
+      "filePath": "pdfs/133_100ml草本CS乳-玻璃瓶.pdf"
+    },
+    {
+      "id": 239,
+      "record_id": 128,
+      "file_name": "100ml草本CS水-外盖.pdf",
+      "filePath": "pdfs/128_100ml草本CS水-外盖.pdf"
+    },
+    {
+      "id": 240,
+      "record_id": 121,
+      "file_name": "100g帧颜洁面-内盖.pdf",
+      "filePath": "pdfs/121_100g帧颜洁面-内盖.pdf"
+    },
+    {
+      "id": 241,
+      "record_id": 120,
+      "file_name": "100g帧颜洁面-外盖.pdf",
+      "filePath": "pdfs/120_100g帧颜洁面-外盖.pdf"
     }
   ],
   "config": {
@@ -17162,6 +17540,6 @@
     "displayColumn": "模具状态"
   },
   "editPassword": "PECHOIN1931",
-  "lastUpdated": "2026-11-23T08:19:09.951Z",
+  "lastUpdated": "2026-11-23T08:19:25.817Z",
   "version": 2
 }
