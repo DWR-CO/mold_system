@@ -1715,6 +1715,19 @@ async function loadFromServer() {
   var allImages = {};
   var allPdfs = {};
 
+  // Index every stored PDF by its normalized base file name. A PDF whose name
+  // equals a 模具套组 is that mold set's drawing: it is shown on EVERY part of
+  // the set, while the file itself stays stored/uploaded only once.
+  var pdfByBaseName = {};
+  for (var pbi = 0; pbi < _localPdfs.length; pbi++) {
+    var pbPdf = _localPdfs[pbi];
+    var pbBase = String(pbPdf.file_name || '').replace(/\.pdf$/i, '');
+    var pbKey = normalizeMoldName(pbBase);
+    if (!pbKey) continue;
+    if (!pdfByBaseName[pbKey]) pdfByBaseName[pbKey] = [];
+    pdfByBaseName[pbKey].push(pbPdf);
+  }
+
   for (var i = 0; i < records.length; i++) {
     var rec = records[i];
     allData.push(rec.data);
@@ -1725,21 +1738,48 @@ async function loadFromServer() {
       allImages[rec.id] = recImages.map(function(img) { return img.base64 || img.file_path; });
     }
     var recPdfs = _localPdfs.filter(function(p) { return p.record_id === rec.id; });
-    if (recPdfs.length > 0) {
-      // Include ALL PDFs, even metadata-only ones (no base64). localStorage only
-      // stores metadata, so after a refresh every PDF is metadata-only; keeping
-      // them here ensures the PDF button/thumbnail still shows, and viewPdf can
-      // lazily download the real content from GitHub when the user opens it.
-      allPdfs[rec.id] = recPdfs.map(function(p) {
-        return {
-          name: p.file_name || 'document.pdf',
-          url: p.base64 || null,
-          _needDownload: !p.base64,
-          _recordId: rec.id,
-          _fileName: p.file_name || 'document.pdf'
-        };
-      });
+    // Include ALL PDFs, even metadata-only ones (no base64). localStorage only
+    // stores metadata, so after a refresh every PDF is metadata-only; keeping
+    // them here ensures the PDF button/thumbnail still shows, and viewPdf can
+    // lazily download the real content from GitHub when the user opens it.
+    var pdfEntries = recPdfs.map(function(p) {
+      return {
+        name: p.file_name || 'document.pdf',
+        url: p.base64 || null,
+        _needDownload: !p.base64,
+        _recordId: rec.id,
+        _fileName: p.file_name || 'document.pdf'
+      };
+    });
+
+    // ACTIVE molds: also surface the set-level drawing (PDF file name == 模具套组)
+    // on every part of the set. Borrowed entries point at the OWNER record so the
+    // lazy content download uses the correct GitHub path.
+    var taoVal = getTaoZuValue(rec.data);
+    if (taoVal && rec.data && String(rec.data['系统'] || '') === '活跃') {
+      var taoKey = normalizeMoldName(taoVal);
+      var taoPdfs = pdfByBaseName[taoKey] || [];
+      var shownNames = {};
+      for (var sn = 0; sn < pdfEntries.length; sn++) {
+        shownNames[String(pdfEntries[sn].name).toLowerCase()] = true;
+      }
+      for (var tp = 0; tp < taoPdfs.length; tp++) {
+        var ownerPdf = taoPdfs[tp];
+        if (ownerPdf.record_id === rec.id) continue; // already listed as own
+        var ownerName = String(ownerPdf.file_name || 'document.pdf');
+        if (shownNames[ownerName.toLowerCase()]) continue; // avoid duplicate display
+        shownNames[ownerName.toLowerCase()] = true;
+        pdfEntries.push({
+          name: ownerName,
+          url: ownerPdf.base64 || null,
+          _needDownload: !ownerPdf.base64,
+          _recordId: ownerPdf.record_id,
+          _fileName: ownerName
+        });
+      }
     }
+
+    if (pdfEntries.length > 0) allPdfs[rec.id] = pdfEntries;
   }
 
   appState.rawData = allData.slice();
@@ -4019,9 +4059,17 @@ async function autoMatchPdfs(files) {
     if (appState.headers[h].indexOf('产品名称') !== -1) { productNameCol = appState.headers[h]; break; }
   }
 
-  console.log('[PDF匹配] 模具名称列:', moldCol, '合同编号列:', contractCol, '产品名称列:', productNameCol);
+  // Find the mold-set column (模具套组) used for ACTIVE mold PDF matching:
+  // a PDF whose filename equals a 模具套组 is that set's drawing and belongs to
+  // every part of the set (stored once, shown on all parts).
+  var taoCol = null;
+  for (var h = 0; h < appState.headers.length; h++) {
+    if (appState.headers[h].indexOf('模具套组') !== -1) { taoCol = appState.headers[h]; break; }
+  }
 
-  if (!moldCol && !contractCol && !productNameCol) return { matched: 0, unmatched: 0 };
+  console.log('[PDF匹配] 模具名称列:', moldCol, '合同编号列:', contractCol, '产品名称列:', productNameCol, '模具套组列:', taoCol);
+
+  if (!moldCol && !contractCol && !productNameCol && !taoCol) return { matched: 0, unmatched: 0 };
 
   // Build mold name → mappedDataIdx lookup (one-to-one, first match wins)
   // CRITICAL: Use mappedData (filtered view) instead of rawData (full array)
@@ -4085,7 +4133,23 @@ async function autoMatchPdfs(files) {
     }
   }
 
-  console.log('[PDF匹配] 名称映射条目数:', Object.keys(nameMap).length, '合同编号映射条目数:', Object.keys(contractMap).length);
+  // Build 模具套组 → [mappedDataIdx] lookup (one-to-many).
+  // ACTIVE records only. A PDF named exactly like a 模具套组 is the set's
+  // drawing: it is attached to EVERY part of that set (stored once).
+  var taoMap = {};
+  if (taoCol) {
+    for (var i = 0; i < sourceData.length; i++) {
+      if (recordSystem(sourceData[i]) !== '活跃') continue; // only active molds
+      var taoName = sourceData[i][taoCol];
+      if (taoName != null && String(taoName).trim()) {
+        var tKey = normalizeMoldName(String(taoName));
+        if (!taoMap.hasOwnProperty(tKey)) taoMap[tKey] = [];
+        taoMap[tKey].push(i);
+      }
+    }
+  }
+
+  console.log('[PDF匹配] 名称映射条目数:', Object.keys(nameMap).length, '合同编号映射条目数:', Object.keys(contractMap).length, '模具套组条目数:', Object.keys(taoMap).length);
   
   // DEBUG: Log all mold names in nameMap to check for duplicates
   console.log('[PDF匹配] nameMap前10个条目:');
@@ -4110,15 +4174,25 @@ async function autoMatchPdfs(files) {
 
     var matchedIndices = [];
 
-    // PRIORITY 0: ACTIVE molds match by 产品名称 == PDF filename, one-to-one (no fan-out).
-    if (productNameMap.hasOwnProperty(lookupKey)) {
+    // PRIORITY 0: ACTIVE molds match by 模具套组 == PDF filename. The PDF is the
+    // whole set's drawing, so it is attached to EVERY part of the set (the file
+    // itself is stored/uploaded only once, via matchedFileInfos below).
+    if (taoMap.hasOwnProperty(lookupKey)) {
+      var taoIndices = taoMap[lookupKey];
+      for (var t = 0; t < taoIndices.length; t++) matchedIndices.push(taoIndices[t]);
+      var taoRecord = sourceData[taoIndices[0]];
+      console.log('[PDF匹配] ✓ 模具套组匹配成功（活跃模具，套组下 ' + taoIndices.length + ' 个部件）, 套组:', taoRecord[taoCol]);
+    }
+
+    // PRIORITY 1: ACTIVE molds match by 产品名称 == PDF filename, one-to-one (no fan-out).
+    if (matchedIndices.length === 0 && productNameMap.hasOwnProperty(lookupKey)) {
       console.log('[PDF匹配] ✓ 产品名称匹配成功（活跃模具，一一对应）, 索引:', productNameMap[lookupKey]);
       matchedIndices.push(productNameMap[lookupKey]);
       var activeRecord = sourceData[productNameMap[lookupKey]];
       console.log('[PDF匹配]   匹配记录详情 - 产品名称:', activeRecord[productNameCol]);
     }
 
-    // PRIORITY 1: Try mold name first (as per user requirement) - STAGNANT records
+    // PRIORITY 2: Try mold name first (as per user requirement) - STAGNANT records
     if (matchedIndices.length === 0 && nameMap.hasOwnProperty(lookupKey)) {
       console.log('[PDF匹配] ✓ 模具名称匹配成功（优先）, 索引:', nameMap[lookupKey]);
       matchedIndices.push(nameMap[lookupKey]);
@@ -6010,6 +6084,26 @@ function getRecordDisplayName(row, idx) {
   return fallback;
 }
 
+// Helper: locate the 模具套组 (mold-set) column of a record. The header text can
+// vary slightly between imports, so match by substring. Returns null when the
+// record has no such column.
+function getTaoZuColumn(row) {
+  if (!row) return null;
+  for (var k in row) {
+    if (!row.hasOwnProperty(k)) continue;
+    if (String(k).indexOf('模具套组') !== -1) return k;
+  }
+  return null;
+}
+
+// Helper: trimmed 模具套组 value of a record ('' when absent/empty).
+function getTaoZuValue(row) {
+  var col = getTaoZuColumn(row);
+  if (!col) return '';
+  var v = row[col];
+  return (v == null) ? '' : String(v).trim();
+}
+
 function renderLeafLevel(area) {
   var data = getFilteredData();
   if (!data.length) {
@@ -6128,27 +6222,44 @@ function showDetail(idx) {
       }).join('')}
     </div>
     ${function() {
-      // Find contract number column
-      var contractCol = null;
-      var contractKeywords = ['模具合同编号', '合同编号', '模具合同号', '合同号'];
-      for (var kw = 0; kw < contractKeywords.length; kw++) {
-        for (var h = 0; h < appState.headers.length; h++) {
-          if (appState.headers[h].indexOf(contractKeywords[kw]) !== -1) {
-            contractCol = appState.headers[h];
-            break;
+      // Association rule (system-aware):
+      //   ACTIVE   -> related parts share the same 模具套组 (mold-set) name.
+      //   STAGNANT -> related parts share the same contract number (legacy rule).
+      var assocCol = null;
+      var assocVal = '';
+      var assocLabel = '合同编号';
+
+      if (currentSys === '活跃') {
+        var taoVal = getTaoZuValue(row);
+        if (!taoVal) return ''; // strict: no 模具套组 -> no related parts section
+        assocCol = getTaoZuColumn(row);
+        assocVal = taoVal;
+        assocLabel = '模具套组';
+      } else {
+        // Find contract number column
+        var contractCol = null;
+        var contractKeywords = ['模具合同编号', '合同编号', '模具合同号', '合同号'];
+        for (var kw = 0; kw < contractKeywords.length; kw++) {
+          for (var h = 0; h < appState.headers.length; h++) {
+            if (appState.headers[h].indexOf(contractKeywords[kw]) !== -1) {
+              contractCol = appState.headers[h];
+              break;
+            }
           }
+          if (contractCol) break;
         }
-        if (contractCol) break;
+        if (!contractCol || !row[contractCol]) return '';
+        assocCol = contractCol;
+        assocVal = String(row[contractCol]).trim();
       }
 
-      if (!contractCol || !row[contractCol]) return '';
-
-      var contractNum = String(row[contractCol]).trim();
-      // Find related records with same contract number
+      // Find related records with the same association value
       var relatedRecords = [];
       for (var i = 0; i < appState.mappedData.length; i++) {
         var otherRow = appState.mappedData[i];
-        if (i !== idx && otherRow[contractCol] && String(otherRow[contractCol]).trim() === contractNum) {
+        if (i === idx) continue;
+        var otherVal = otherRow[assocCol];
+        if (otherVal != null && String(otherVal).trim() === assocVal) {
           relatedRecords.push({ idx: i, row: otherRow });
         }
       }
@@ -6159,16 +6270,16 @@ function showDetail(idx) {
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
           '<h4 style="font-size:14px;color:var(--text);margin:0;display:flex;align-items:center;gap:8px">' +
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' +
-            '关联部件 <span style="font-size:12px;color:var(--text-secondary);font-weight:400">(' + relatedRecords.length + '个)</span>' +
+            '关联部件 <span style="font-size:12px;color:var(--text-secondary);font-weight:400">(' + relatedRecords.length + '个 · 同一' + assocLabel + ')</span>' +
           '</h4>' +
-          '<button class="btn btn-outline btn-sm" onclick="showRelatedParts(' + idx + ',\'' + escapeAttr(contractCol) + '\',\'' + escapeAttr(contractNum) + '\')">' +
+          '<button class="btn btn-outline btn-sm" onclick="showRelatedParts(' + idx + ',\'' + escapeAttr(assocCol) + '\',\'' + escapeAttr(assocVal) + '\')">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' +
             '查看全部' +
           '</button>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
           relatedRecords.slice(0, 3).map(function(item) {
-            var name = item.row['模具名称'] || item.row['结构部件'] || '记录';
+            var name = getRecordDisplayName(item.row, item.idx);
             var component = item.row['结构部件'] || '';
             return '<div style="padding:8px 12px;background:var(--primary-light);border-radius:8px;font-size:13px;cursor:pointer;transition:var(--transition)" ' +
               'onmouseover="this.style.background=\'var(--primary)\'" onmouseout="this.style.background=\'var(--primary-light)\'" ' +
@@ -6276,12 +6387,14 @@ function viewImage(src, title) {
   openModal('imageModal');
 }
 
-// Show all related parts with same contract number
-function showRelatedParts(currentIdx, contractCol, contractNum) {
+// Show all related parts sharing the same association value
+// (模具套组 for active molds, 合同编号 for stagnant molds)
+function showRelatedParts(currentIdx, assocCol, assocVal) {
+  var label = (assocCol && String(assocCol).indexOf('套组') !== -1) ? '模具套组' : '合同编号';
   var relatedRecords = [];
   for (var i = 0; i < appState.mappedData.length; i++) {
     var row = appState.mappedData[i];
-    if (i !== currentIdx && row[contractCol] && String(row[contractCol]).trim() === contractNum) {
+    if (i !== currentIdx && row[assocCol] && String(row[assocCol]).trim() === assocVal) {
       relatedRecords.push({ idx: i, row: row });
     }
   }
@@ -6293,8 +6406,8 @@ function showRelatedParts(currentIdx, contractCol, contractNum) {
 
   // Build modal content
   var html = '<div style="margin-bottom:16px;padding:12px 16px;background:var(--primary-light);border-radius:8px">' +
-    '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">合同编号</div>' +
-    '<div style="font-size:16px;font-weight:600;color:var(--primary-dark)">' + escapeHtml(contractNum) + '</div>' +
+    '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">' + label + '</div>' +
+    '<div style="font-size:16px;font-weight:600;color:var(--primary-dark)">' + escapeHtml(assocVal) + '</div>' +
     '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">共 ' + relatedRecords.length + ' 个关联部件</div>' +
   '</div>';
 
@@ -6302,7 +6415,7 @@ function showRelatedParts(currentIdx, contractCol, contractNum) {
 
   relatedRecords.forEach(function(item) {
     var row = item.row;
-    var name = row['模具名称'] || '未命名';
+    var name = getRecordDisplayName(row, item.idx);
     var component = row['结构部件'] || '';
     var supplier = row['供应商'] || '';
     var moldCavity = row['模具穴数'] || '';
